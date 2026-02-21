@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calorie Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <section id="setup-flow" class="setup-flow">
+        <header class="panel">
+          <p class="eyebrow">Step 1 of 2</p>
+          <h1>Select or create a profile</h1>
+          <p class="subhead">Choose who is using the app, then save profile details in feet/inches and lbs.</p>
+          <div class="setup-grid">
+            <label>
+              Existing profiles
+              <select id="setup-profile-select"></select>
+            </label>
+            <label>
+              New profile name
+              <input id="setup-new-profile-name" type="text" placeholder="Alex" />
+            </label>
+            <button class="ghost" id="setup-create-profile" type="button">Create profile</button>
+            <button class="ghost danger" id="setup-delete-profile" type="button">Delete selected profile</button>
+          </div>
+          <form id="setup-profile-form" class="form-grid">
+            <label>
+              Name
+              <input id="setup-profile-name" type="text" required />
+            </label>
+            <label>
+              Sex
+              <select id="setup-profile-sex" required>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+              </select>
+            </label>
+            <label>
+              Age
+              <input id="setup-profile-age" type="number" min="13" max="100" step="1" required />
+            </label>
+            <label>
+              Height (ft)
+              <input id="setup-profile-height-ft" type="number" min="3" max="8" step="1" required />
+            </label>
+            <label>
+              Height (in)
+              <input id="setup-profile-height-in" type="number" min="0" max="11" step="1" required />
+            </label>
+            <label>
+              Current weight (lbs)
+              <input id="setup-profile-weight" type="number" min="66" max="660" step="0.1" required />
+            </label>
+            <label>
+              Daily step goal
+              <input id="setup-profile-step-goal" type="number" min="1000" max="50000" step="100" required />
+            </label>
+            <button class="primary" type="submit">Save profile and continue</button>
+          </form>
+        </header>
+
+        <section id="setup-plan-step" class="panel">
+          <p class="eyebrow">Step 2 of 2</p>
+          <h2>Select or create a plan</h2>
+          <p>Pick an existing plan for this profile, or create a new one, then enter the app.</p>
+          <div class="setup-grid">
+            <label>
+              Existing plans
+              <select id="setup-plan-select"></select>
+            </label>
+            <label>
+              New plan name
+              <input id="setup-new-plan-name" type="text" placeholder="Summer Cut" />
+            </label>
+            <button class="ghost" id="setup-create-plan" type="button">Create plan</button>
+          </div>
+          <form id="setup-plan-form" class="form-grid">
+            <label>
+              Goal type
+              <select id="setup-goal-type" required>
+                <option value="lose">Lose weight</option>
+                <option value="maintain">Maintain</option>
+                <option value="gain">Gain weight</option>
+              </select>
+            </label>
+            <label>
+              Target weight (lbs)
+              <input id="setup-target-weight" type="number" min="66" max="660" step="0.1" required />
+            </label>
+            <label>
+              Weekly pace (lbs/week)
+              <input id="setup-weekly-rate" type="number" min="0.2" max="3.0" step="0.1" required />
+            </label>
+            <label>
+              Daily step goal
+              <input id="setup-plan-step-goal" type="number" min="1000" max="50000" step="100" required />
+            </label>
+            <label>
+              Manual calorie override (optional)
+              <input id="setup-goal-override" type="number" min="1000" max="5000" step="10" />
+            </label>
+            <button class="primary" type="submit">Save plan and open dashboard</button>
+          </form>
+        </section>
+      </section>
+
+      <div id="app-shell" class="hidden">
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Today</p>
+            <h1>Your daily dashboard</h1>
+            <p class="subhead">
+              <span id="active-profile-label">Profile</span> · <span id="active-plan-label">Plan</span>
+            </p>
+            <button class="ghost" id="switch-setup" type="button">Switch profile or plan</button>
+          </div>
+          <div class="hero-card">
+            <div class="ring" aria-hidden="true">
+              <svg viewBox="0 0 120 120">
+                <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+                <circle class="ring-progress" cx="60" cy="60" r="52"></circle>
+              </svg>
+              <div class="ring-label">
+                <span id="ring-percent">0%</span>
+                <span class="ring-caption">of daily target</span>
+              </div>
+            </div>
+            <div class="hero-stats">
+              <div>
+                <span class="stat-label">Target</span>
+                <span id="goal-value" class="stat-value">2,000</span>
+              </div>
+              <div>
+                <span class="stat-label">Logged</span>
+                <span id="today-value" class="stat-value">0</span>
+              </div>
+              <div>
+                <span class="stat-label">Remaining</span>
+                <span id="remaining-value" class="stat-value">2,000</span>
+              </div>
+              <div>
+                <span class="stat-label">Top meal</span>
+                <span id="top-meal" class="stat-value">—</span>
+              </div>
+            </div>
+            <div class="hero-meta">
+              <p id="recommendation-meta">Your calorie recommendation appears here.</p>
+              <button class="ghost" id="reset-day" type="button">Reset selected day</button>
+            </div>
+          </div>
+        </header>
+
+        <main class="grid">
+          <section class="panel active-plan-panel">
+            <div class="panel-header">
+              <h2>Active plan</h2>
+              <p>Update your goal settings for this plan.</p>
+            </div>
+            <form id="goal-form" class="form-grid compact-form">
+              <label>
+                Goal type
+                <select id="goal-type" required>
+                  <option value="lose">Lose weight</option>
+                  <option value="maintain">Maintain</option>
+                  <option value="gain">Gain weight</option>
+                </select>
+              </label>
+              <label>
+                Target weight (lbs)
+                <input id="target-weight" type="number" min="66" max="660" step="0.1" required />
+              </label>
+              <label>
+                Weekly pace (lbs/week)
+                <input id="weekly-rate" type="number" min="0.2" max="3.0" step="0.1" required />
+              </label>
+              <label>
+                Daily step goal
+                <input id="goal-step-goal" type="number" min="1000" max="50000" step="100" required />
+              </label>
+              <label>
+                Manual calorie override (optional)
+                <input id="goal-override" type="number" min="1000" max="5000" step="10" />
+              </label>
+              <button class="primary" type="submit">Update plan</button>
+            </form>
+            <div class="plan-summary">
+              <article class="plan-card primary">
+                <span class="stat-label">Actual budget</span>
+                <span id="actual-budget-value" class="stat-value">—</span>
+              </article>
+              <article class="plan-card">
+                <span class="stat-label">Day deficit/surplus</span>
+                <span id="day-balance-value" class="stat-value">—</span>
+              </article>
+              <article class="plan-card">
+                <span class="stat-label">Projected date</span>
+                <span id="projection-value" class="stat-value">—</span>
+              </article>
+            </div>
+
+            <details class="calc-details">
+              <summary>How today is calculated</summary>
+              <div class="mini-stats">
+                <div>
+                  <span class="stat-label">BMR</span>
+                  <span id="bmr-value" class="stat-value">—</span>
+                </div>
+                <div>
+                  <span class="stat-label">Baseline TDEE</span>
+                  <span id="tdee-value" class="stat-value">—</span>
+                </div>
+                <div>
+                  <span class="stat-label">Expected TDEE</span>
+                  <span id="expected-tdee-value" class="stat-value">—</span>
+                </div>
+                <div>
+                  <span class="stat-label">Actual TDEE</span>
+                  <span id="actual-tdee-value" class="stat-value">—</span>
+                </div>
+                <div>
+                  <span class="stat-label">Expected budget</span>
+                  <span id="expected-budget-value" class="stat-value">—</span>
+                </div>
+                <div>
+                  <span class="stat-label">Goal delta</span>
+                  <span id="delta-value" class="stat-value">—</span>
+                </div>
+                <div>
+                  <span class="stat-label">Recommended</span>
+                  <span id="recommended-value" class="stat-value">—</span>
+                </div>
+                <div>
+                  <span class="stat-label">Safety floor</span>
+                  <span id="floor-value" class="stat-value">—</span>
+                </div>
+                <div>
+                  <span class="stat-label">Step deficit/surplus</span>
+                  <span id="step-balance-value" class="stat-value">—</span>
+                </div>
+              </div>
+            </details>
+          </section>
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Weight check-ins</h2>
+              <p>Add weigh-ins to keep your recommendation current.</p>
+            </div>
+            <form id="weight-form" class="inline-form">
+              <label>
+                Date
+                <input id="weight-date" type="date" required />
+              </label>
+              <label>
+                Weight (lbs)
+                <input id="weight-value" type="number" min="66" max="660" step="0.1" required />
+              </label>
+              <button class="primary" type="submit">Add check-in</button>
+            </form>
+            <div id="weight-history" class="history-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Daily steps</h2>
+              <p>Log daily steps to adjust your actual calorie budget.</p>
+            </div>
+            <form id="steps-form" class="inline-form">
+              <label>
+                Date
+                <input id="steps-date" type="date" required />
+              </label>
+              <label>
+                Steps
+                <input id="steps-value" type="number" min="0" max="100000" step="1" required />
+              </label>
+              <button class="primary" type="submit">Save steps</button>
+            </form>
+            <div id="steps-history" class="history-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Log food</h2>
+              <p>Quickly add food selections to today or any selected day.</p>
+            </div>
+            <form id="entry-form" class="form-grid">
+              <label>
+                Food name
+                <input type="text" id="food-name" placeholder="Turkey wrap" required />
+              </label>
+              <label>
+                Meal
+                <select id="meal" required>
+                  <option value="Breakfast">Breakfast</option>
+                  <option value="Lunch">Lunch</option>
+                  <option value="Dinner">Dinner</option>
+                  <option value="Snack">Snack</option>
+                </select>
+              </label>
+              <label>
+                Calories
+                <input type="number" id="calories" min="0" step="1" placeholder="420" required />
+              </label>
+              <label>
+                Time
+                <input type="time" id="time" />
+              </label>
+              <label>
+                Notes
+                <input type="text" id="notes" placeholder="Side salad, no dressing" />
+              </label>
+              <button class="primary" type="submit">Add entry</button>
+            </form>
+            <div class="tag-list" id="quick-adds">
+              <button type="button" data-calories="150">Energy bar +150</button>
+              <button type="button" data-calories="220">Latte +220</button>
+              <button type="button" data-calories="350">Smoothie +350</button>
+            </div>
+          </section>
+
+          <section class="panel full">
+            <div class="panel-header with-controls">
+              <div>
+                <h2>Food history</h2>
+                <p id="selected-date-label">Selected day</p>
+              </div>
+              <div class="date-controls">
+                <button class="ghost" type="button" id="date-prev">Previous</button>
+                <input id="selected-date" type="date" />
+                <button class="ghost" type="button" id="date-next">Next</button>
+              </div>
+            </div>
+            <div class="filters">
+              <button class="filter active" data-meal="All">All</button>
+              <button class="filter" data-meal="Breakfast">Breakfast</button>
+              <button class="filter" data-meal="Lunch">Lunch</button>
+              <button class="filter" data-meal="Dinner">Dinner</button>
+              <button class="filter" data-meal="Snack">Snack</button>
+            </div>
+            <div class="log" id="log"></div>
+          </section>
+
+          <section class="panel full">
+            <div class="panel-header">
+              <h2>Trend archive</h2>
+              <p>Review your recent days and weight trend for this profile.</p>
+            </div>
+            <div class="history-controls">
+              <label>
+                Range
+                <select id="history-range">
+                  <option value="30">Last 30 days</option>
+                  <option value="90">Last 90 days</option>
+                  <option value="180">Last 180 days</option>
+                  <option value="365">Last year</option>
+                </select>
+              </label>
+            </div>
+            <div class="mini-stats">
+              <div>
+                <span class="stat-label">Days with logs</span>
+                <span id="history-days" class="stat-value">0</span>
+              </div>
+              <div>
+                <span class="stat-label">Avg calories/day</span>
+                <span id="history-average" class="stat-value">0</span>
+              </div>
+              <div>
+                <span class="stat-label">Weight change</span>
+                <span id="history-weight-delta" class="stat-value">—</span>
+              </div>
+            </div>
+            <div id="history-bars" class="history-bars"></div>
+            <div id="history-table" class="history-list"></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="edit-modal" class="modal">
+      <form method="dialog" id="edit-form">
+        <div class="modal-header">
+          <h3>Edit entry</h3>
+          <button class="ghost" type="button" id="close-modal">Close</button>
+        </div>
+        <label>
+          Food name
+          <input type="text" id="edit-food" required />
+        </label>
+        <label>
+          Meal
+          <select id="edit-meal" required>
+            <option value="Breakfast">Breakfast</option>
+            <option value="Lunch">Lunch</option>
+            <option value="Dinner">Dinner</option>
+            <option value="Snack">Snack</option>
+          </select>
+        </label>
+        <label>
+          Calories
+          <input type="number" id="edit-calories" min="0" step="1" required />
+        </label>
+        <label>
+          Time
+          <input type="time" id="edit-time" />
+        </label>
+        <label>
+          Notes
+          <input type="text" id="edit-notes" />
+        </label>
+        <div class="modal-actions">
+          <button class="primary" type="submit">Save changes</button>
+          <button class="ghost danger" type="button" id="delete-entry">Delete entry</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
