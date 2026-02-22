@@ -108,6 +108,12 @@ p {
   line-height: 1.45;
 }
 
+.cloud-sync-last {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .cloud-sync-controls {
   margin-top: 10px;
   display: grid;

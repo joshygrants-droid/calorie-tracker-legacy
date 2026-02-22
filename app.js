@@ -3,6 +3,7 @@ const STORAGE_KEY_V4 = "calorie-tracker-v4";
 const STORAGE_KEY_V3 = "calorie-tracker-v3";
 const STORAGE_KEY_V2 = "calorie-tracker-v2";
 const STORAGE_KEY_V1 = "calorie-tracker-v1";
+const STORAGE_KEY_CLOUD_LAST_SYNC = "calorie-tracker-cloud-last-sync-v1";
 const SCHEMA_VERSION = 5;
 const DEFAULT_CALORIES = 2000;
 
@@ -53,6 +54,7 @@ const elements = {
   activePlanLabel: document.getElementById("active-plan-label"),
   cloudSyncPanel: document.getElementById("cloud-sync-panel"),
   cloudSyncStatus: document.getElementById("cloud-sync-status"),
+  cloudSyncLast: document.getElementById("cloud-sync-last"),
   cloudEmail: document.getElementById("cloud-email"),
   cloudSignIn: document.getElementById("cloud-sign-in"),
   cloudSignOut: document.getElementById("cloud-sign-out"),
@@ -174,6 +176,8 @@ let cloudStatusNote = "";
 let cloudAutoPullIntervalId = null;
 let cloudLastAutoPullAt = 0;
 let allowLocalWithoutSignIn = false;
+let cloudLastSyncAt = null;
+let cloudLastSyncKind = "";
 
 function todayKey() {
   return toDateKeyInAppTimeZone(new Date());
@@ -751,6 +755,53 @@ function updateSetupAccessState() {
   });
 }
 
+function getCloudLastSyncStore() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY_CLOUD_LAST_SYNC) || "{}");
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveCloudLastSyncStore(store) {
+  localStorage.setItem(STORAGE_KEY_CLOUD_LAST_SYNC, JSON.stringify(store));
+}
+
+function clearCloudLastSyncRuntime() {
+  cloudLastSyncAt = null;
+  cloudLastSyncKind = "";
+}
+
+function hydrateCloudLastSyncForUser(userId) {
+  clearCloudLastSyncRuntime();
+  if (!userId) return;
+  const store = getCloudLastSyncStore();
+  const entry = store[userId];
+  if (!entry?.at) return;
+  const ts = Date.parse(String(entry.at));
+  if (!Number.isFinite(ts)) return;
+  cloudLastSyncAt = new Date(ts).toISOString();
+  cloudLastSyncKind = String(entry.kind || "");
+}
+
+function recordCloudLastSync(when = new Date(), kind = "Synced") {
+  const timestamp = when instanceof Date ? when.getTime() : Date.parse(String(when || ""));
+  if (!Number.isFinite(timestamp)) return;
+  cloudLastSyncAt = new Date(timestamp).toISOString();
+  cloudLastSyncKind = kind;
+  const userId = cloudSession?.user?.id;
+  if (!userId) return;
+  const store = getCloudLastSyncStore();
+  store[userId] = { at: cloudLastSyncAt, kind };
+  saveCloudLastSyncStore(store);
+}
+
+function cloudLastSyncLabel() {
+  if (!cloudLastSyncAt) return "Last sync: —";
+  const time = cloudTimeLabel(cloudLastSyncAt);
+  return cloudLastSyncKind ? `Last sync: ${time} (${cloudLastSyncKind})` : `Last sync: ${time}`;
+}
+
 function renderCloudStatus() {
   if (!elements.cloudSyncStatus || !elements.cloudSignIn || !elements.cloudSignOut || !elements.cloudSyncNow) return;
   const configured = Boolean(cloudConfig?.supabaseUrl && cloudConfig?.supabaseAnonKey);
@@ -777,6 +828,9 @@ function renderCloudStatus() {
     elements.cloudLocalOnly.classList.toggle("hidden", !configured || signedIn);
     elements.cloudLocalOnly.disabled = !configured || signedIn || cloudSyncInFlight;
     elements.cloudLocalOnly.textContent = allowLocalWithoutSignIn ? "Local-only active" : "Use local only";
+  }
+  if (elements.cloudSyncLast) {
+    elements.cloudSyncLast.textContent = cloudLastSyncLabel();
   }
   updateSetupAccessState();
 }
@@ -871,6 +925,7 @@ async function syncStateToCloud({ status = "Syncing to cloud..." } = {}) {
   renderCloudStatus();
   try {
     await upsertCloudStateRow();
+    recordCloudLastSync(new Date(), "Uploaded");
     cloudStatusNote = `Synced at ${cloudTimeLabel()}.`;
     return true;
   } catch (error) {
@@ -896,6 +951,7 @@ async function syncCloudState(options = {}) {
     const row = await pullCloudStateRow();
     if (!row?.state) {
       await upsertCloudStateRow();
+      recordCloudLastSync(new Date(), "Initialized");
       if (showStatus) cloudStatusNote = "Cloud initialized from this device.";
       return true;
     }
@@ -911,16 +967,19 @@ async function syncCloudState(options = {}) {
 
     if (remoteUpdatedAt > localUpdatedAt) {
       applyCloudState(remoteState);
+      recordCloudLastSync(new Date(remoteUpdatedAt), "Downloaded");
       cloudStatusNote = `Loaded cloud data (${cloudTimeLabel(remoteUpdatedAt)}).`;
       return true;
     }
 
     if (localUpdatedAt > remoteUpdatedAt) {
       await upsertCloudStateRow();
+      recordCloudLastSync(new Date(), "Uploaded");
       if (showStatus) cloudStatusNote = `Uploaded local changes (${cloudTimeLabel()}).`;
       return true;
     }
 
+    recordCloudLastSync(new Date(), "Checked");
     if (!suppressNoChangeStatus) {
       cloudStatusNote = `Already in sync (${cloudTimeLabel()}).`;
     }
@@ -989,6 +1048,7 @@ async function signOutCloudSession() {
     cloudSession = null;
     allowLocalWithoutSignIn = true;
     stopCloudAutoPull();
+    clearCloudLastSyncRuntime();
     cloudStatusNote = "Signed out. Local-only mode.";
   } catch (error) {
     console.error("Sign-out failed:", error);
@@ -1037,6 +1097,7 @@ async function initCloudSync() {
     cloudSession = session;
     if (event === "SIGNED_IN") {
       allowLocalWithoutSignIn = false;
+      hydrateCloudLastSyncForUser(session?.user?.id);
       cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
       renderCloudStatus();
       startCloudAutoPull();
@@ -1046,6 +1107,7 @@ async function initCloudSync() {
     if (event === "SIGNED_OUT") {
       allowLocalWithoutSignIn = true;
       stopCloudAutoPull();
+      clearCloudLastSyncRuntime();
       cloudStatusNote = "Signed out. Local-only mode.";
       renderCloudStatus();
       return;
@@ -1055,6 +1117,7 @@ async function initCloudSync() {
 
   if (cloudSession?.user?.id) {
     allowLocalWithoutSignIn = false;
+    hydrateCloudLastSyncForUser(cloudSession.user.id);
     cloudStatusNote = `Signed in as ${cloudSession.user.email || "account"}.`;
     renderCloudStatus();
     startCloudAutoPull();
@@ -1063,6 +1126,7 @@ async function initCloudSync() {
   }
   allowLocalWithoutSignIn = false;
   stopCloudAutoPull();
+  clearCloudLastSyncRuntime();
   cloudStatusNote = "Sign in to load cloud data before profile setup.";
   renderCloudStatus();
 }
