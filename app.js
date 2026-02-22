@@ -43,6 +43,7 @@ const elements = {
   setupPlanSelect: document.getElementById("setup-plan-select"),
   setupNewPlanName: document.getElementById("setup-new-plan-name"),
   setupCreatePlan: document.getElementById("setup-create-plan"),
+  setupDeletePlan: document.getElementById("setup-delete-plan"),
   setupPlanForm: document.getElementById("setup-plan-form"),
   activeProfileLabel: document.getElementById("active-profile-label"),
   activePlanLabel: document.getElementById("active-plan-label"),
@@ -757,6 +758,32 @@ function createPlan(name) {
   profile.updatedAt = nowIso();
   persistState(state);
   return plan;
+}
+
+function deleteActivePlan(planId = getActiveProfile().activePlanId) {
+  const profile = getActiveProfile();
+  const targetId = profile.plans[planId] ? planId : profile.activePlanId;
+  const targetPlan = profile.plans[targetId];
+  if (!targetPlan) return;
+
+  const planIds = Object.keys(profile.plans || {});
+  const isLastPlan = planIds.length <= 1;
+  const prompt = isLastPlan
+    ? `Are you sure you want to delete plan "${targetPlan.name}"?\n\nThis action cannot be undone. A fresh default plan will be created automatically.`
+    : `Are you sure you want to delete plan "${targetPlan.name}"?\n\nThis action cannot be undone and will remove the plan settings.`;
+  if (!confirm(prompt)) return;
+
+  delete profile.plans[targetId];
+  const remaining = Object.keys(profile.plans || {});
+  if (!remaining.length) {
+    const fallback = createDefaultPlan("Default Plan");
+    profile.plans[fallback.id] = fallback;
+    profile.activePlanId = fallback.id;
+  } else {
+    profile.activePlanId = remaining.includes(profile.activePlanId) ? profile.activePlanId : remaining[0];
+  }
+  profile.updatedAt = nowIso();
+  persistState(state);
 }
 
 function updateRing(percent) {
@@ -1634,6 +1661,11 @@ function renderSetupFlow() {
     profiles.length <= 1
       ? "Deleting the last profile will create a fresh default profile."
       : "Delete the currently selected profile.";
+  elements.setupDeletePlan.disabled = false;
+  elements.setupDeletePlan.title =
+    plans.length <= 1
+      ? "Deleting the last plan will create a fresh default plan."
+      : "Delete the currently selected plan.";
 }
 
 function calculateDayBudget(dateKey) {
@@ -2002,6 +2034,10 @@ elements.setupCreatePlan.addEventListener("click", () => {
   const created = createPlan(name);
   if (created?.id) setActivePlan(created.id);
   elements.setupNewPlanName.value = "";
+  renderSetupFlow();
+});
+elements.setupDeletePlan.addEventListener("click", () => {
+  deleteActivePlan(elements.setupPlanSelect.value);
   renderSetupFlow();
 });
 elements.setupPlanForm.addEventListener("submit", (event) => {
