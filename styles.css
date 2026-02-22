@@ -91,6 +91,12 @@ p {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.global-cloud-sync-panel {
+  margin-top: 0;
+  margin-bottom: 16px;
+  max-width: 860px;
+}
+
 .cloud-sync-title {
   font-weight: 700;
   margin-bottom: 4px;
@@ -105,7 +111,7 @@ p {
 .cloud-sync-controls {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) repeat(3, auto);
+  grid-template-columns: minmax(220px, 1fr) repeat(4, auto);
   gap: 8px;
   align-items: end;
 }
@@ -116,6 +122,10 @@ p {
 
 .cloud-email-label input {
   margin-top: 6px;
+}
+
+.setup-flow.setup-locked .panel {
+  border: 1px dashed rgba(244, 91, 75, 0.35);
 }
 
 .hero-card {

@@ -57,6 +57,7 @@ const elements = {
   cloudSignIn: document.getElementById("cloud-sign-in"),
   cloudSignOut: document.getElementById("cloud-sign-out"),
   cloudSyncNow: document.getElementById("cloud-sync-now"),
+  cloudLocalOnly: document.getElementById("cloud-local-only"),
   goalValue: document.getElementById("goal-value"),
   todayValue: document.getElementById("today-value"),
   remainingValue: document.getElementById("remaining-value"),
@@ -172,6 +173,7 @@ let cloudSyncInFlight = false;
 let cloudStatusNote = "";
 let cloudAutoPullIntervalId = null;
 let cloudLastAutoPullAt = 0;
+let allowLocalWithoutSignIn = false;
 
 function todayKey() {
   return toDateKeyInAppTimeZone(new Date());
@@ -734,25 +736,49 @@ function cloudTimeLabel(input = new Date()) {
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
+function requiresCloudSignInForSetup() {
+  const configured = Boolean(cloudConfig?.supabaseUrl && cloudConfig?.supabaseAnonKey);
+  const signedIn = Boolean(cloudSession?.user?.id);
+  return configured && !signedIn && !allowLocalWithoutSignIn;
+}
+
+function updateSetupAccessState() {
+  if (!elements.setupFlow) return;
+  const locked = requiresCloudSignInForSetup();
+  elements.setupFlow.classList.toggle("setup-locked", locked);
+  elements.setupFlow.querySelectorAll("input, select, button, textarea").forEach((control) => {
+    control.disabled = locked;
+  });
+}
+
 function renderCloudStatus() {
   if (!elements.cloudSyncStatus || !elements.cloudSignIn || !elements.cloudSignOut || !elements.cloudSyncNow) return;
-  const configured = Boolean(cloudConfig?.supabaseUrl && cloudConfig?.supabaseAnonKey && cloudClient);
+  const configured = Boolean(cloudConfig?.supabaseUrl && cloudConfig?.supabaseAnonKey);
+  const ready = configured && Boolean(cloudClient);
   const signedIn = Boolean(cloudSession?.user?.id);
 
   const defaultText = !configured
     ? "Local-only mode. Configure Supabase + Vercel to enable account sync."
     : signedIn
       ? `Signed in as ${cloudSession.user.email || "account"}.`
-      : "Cloud configured. Sign in to sync data across devices.";
+      : allowLocalWithoutSignIn
+        ? "Local-only mode active on this device. Sign in any time to sync."
+        : "Sign in to load cloud data before profile setup.";
   elements.cloudSyncStatus.textContent = cloudStatusNote || defaultText;
 
-  elements.cloudSignIn.disabled = !configured || signedIn || cloudSyncInFlight;
-  elements.cloudSignOut.disabled = !configured || !signedIn || cloudSyncInFlight;
-  elements.cloudSyncNow.disabled = !configured || !signedIn || cloudSyncInFlight;
+  elements.cloudSignIn.disabled = !ready || signedIn || cloudSyncInFlight;
+  elements.cloudSignOut.disabled = !ready || !signedIn || cloudSyncInFlight;
+  elements.cloudSyncNow.disabled = !ready || !signedIn || cloudSyncInFlight;
   if (elements.cloudEmail) {
-    elements.cloudEmail.disabled = !configured || signedIn || cloudSyncInFlight;
+    elements.cloudEmail.disabled = !ready || signedIn || cloudSyncInFlight;
   }
   elements.cloudSignOut.classList.toggle("hidden", !signedIn);
+  if (elements.cloudLocalOnly) {
+    elements.cloudLocalOnly.classList.toggle("hidden", !configured || signedIn);
+    elements.cloudLocalOnly.disabled = !configured || signedIn || cloudSyncInFlight;
+    elements.cloudLocalOnly.textContent = allowLocalWithoutSignIn ? "Local-only active" : "Use local only";
+  }
+  updateSetupAccessState();
 }
 
 async function loadCloudConfig() {
@@ -961,6 +987,7 @@ async function signOutCloudSession() {
     const { error } = await cloudClient.auth.signOut();
     if (error) throw error;
     cloudSession = null;
+    allowLocalWithoutSignIn = true;
     stopCloudAutoPull();
     cloudStatusNote = "Signed out. Local-only mode.";
   } catch (error) {
@@ -975,6 +1002,7 @@ async function signOutCloudSession() {
 async function initCloudSync() {
   renderCloudStatus();
   if (!window.supabase || typeof window.supabase.createClient !== "function") {
+    allowLocalWithoutSignIn = true;
     cloudStatusNote = "Supabase SDK failed to load. Cloud sync is disabled.";
     renderCloudStatus();
     return;
@@ -982,6 +1010,7 @@ async function initCloudSync() {
 
   cloudConfig = await loadCloudConfig();
   if (!cloudConfig) {
+    allowLocalWithoutSignIn = true;
     renderCloudStatus();
     return;
   }
@@ -997,6 +1026,7 @@ async function initCloudSync() {
   const { data, error } = await cloudClient.auth.getSession();
   if (error) {
     console.error("Supabase session init failed:", error);
+    allowLocalWithoutSignIn = true;
     cloudStatusNote = `Cloud auth failed: ${error.message || "Unknown error"}`;
     renderCloudStatus();
     return;
@@ -1006,6 +1036,7 @@ async function initCloudSync() {
   cloudClient.auth.onAuthStateChange((event, session) => {
     cloudSession = session;
     if (event === "SIGNED_IN") {
+      allowLocalWithoutSignIn = false;
       cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
       renderCloudStatus();
       startCloudAutoPull();
@@ -1013,6 +1044,7 @@ async function initCloudSync() {
       return;
     }
     if (event === "SIGNED_OUT") {
+      allowLocalWithoutSignIn = true;
       stopCloudAutoPull();
       cloudStatusNote = "Signed out. Local-only mode.";
       renderCloudStatus();
@@ -1022,14 +1054,16 @@ async function initCloudSync() {
   });
 
   if (cloudSession?.user?.id) {
+    allowLocalWithoutSignIn = false;
     cloudStatusNote = `Signed in as ${cloudSession.user.email || "account"}.`;
     renderCloudStatus();
     startCloudAutoPull();
     await syncCloudState();
     return;
   }
+  allowLocalWithoutSignIn = false;
   stopCloudAutoPull();
-  cloudStatusNote = "Cloud configured. Sign in to sync data across devices.";
+  cloudStatusNote = "Sign in to load cloud data before profile setup.";
   renderCloudStatus();
 }
 
@@ -2005,6 +2039,7 @@ function renderSetupFlow() {
     plans.length <= 1
       ? "Deleting the last plan will create a fresh default plan."
       : "Delete the currently selected plan.";
+  updateSetupAccessState();
 }
 
 function calculateDayBudget(dateKey) {
@@ -2350,6 +2385,13 @@ if (elements.cloudSyncNow) {
       return;
     }
     void syncCloudState();
+  });
+}
+if (elements.cloudLocalOnly) {
+  elements.cloudLocalOnly.addEventListener("click", () => {
+    allowLocalWithoutSignIn = true;
+    cloudStatusNote = "Local-only mode active on this device.";
+    renderCloudStatus();
   });
 }
 document.addEventListener("visibilitychange", () => {
