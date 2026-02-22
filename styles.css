@@ -1050,16 +1050,16 @@ select {
     padding: 32px 18px 60px;
   }
 
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
   .grid > .log-food-panel {
     order: -10;
   }
 
   .grid > .food-history-panel {
     order: -9;
-  }
-
-  .hero-card {
-    order: -1;
   }
 
   .hero-stats {
