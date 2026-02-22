@@ -841,7 +841,12 @@ async function syncCloudState() {
     }
 
     const remoteState = normalizeState(row.state);
-    const remoteUpdatedAt = Math.max(stateUpdatedAt(remoteState), Date.parse(String(row.updated_at || "")) || 0);
+    // Compare based on state payload timestamps first, since DB row timestamps can differ from client clocks.
+    const remoteStateUpdatedAt = stateUpdatedAt(remoteState);
+    const remoteRowUpdatedAt = Date.parse(String(row.updated_at || ""));
+    const remoteUpdatedAt =
+      remoteStateUpdatedAt ||
+      (Number.isFinite(remoteRowUpdatedAt) ? remoteRowUpdatedAt : 0);
     const localUpdatedAt = stateUpdatedAt(state);
 
     if (remoteUpdatedAt > localUpdatedAt) {
@@ -873,6 +878,11 @@ function queueCloudSave() {
   if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(() => {
     cloudSyncTimer = null;
+    // If another sync is running, try again shortly rather than dropping this queued save.
+    if (cloudSyncInFlight) {
+      queueCloudSave();
+      return;
+    }
     void syncStateToCloud({ status: "Syncing recent changes..." });
   }, CLOUD_SYNC_DEBOUNCE_MS);
 }
