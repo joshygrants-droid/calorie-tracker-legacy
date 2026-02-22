@@ -11,6 +11,8 @@ const CALORIES_PER_MILE_PER_LB = 0.53;
 const APP_TIME_ZONE = "America/Denver";
 const PROJECTION_LOG_WINDOW_DAYS = 28;
 const PROJECTION_WEIGHT_LOOKBACK = 8;
+const CLOUD_CONFIG_ENDPOINT = "/api/public-config";
+const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const MACRO_COLORS = {
   protein: "#00c853",
   carbs: "#2979ff",
@@ -47,6 +49,12 @@ const elements = {
   setupPlanForm: document.getElementById("setup-plan-form"),
   activeProfileLabel: document.getElementById("active-profile-label"),
   activePlanLabel: document.getElementById("active-plan-label"),
+  cloudSyncPanel: document.getElementById("cloud-sync-panel"),
+  cloudSyncStatus: document.getElementById("cloud-sync-status"),
+  cloudEmail: document.getElementById("cloud-email"),
+  cloudSignIn: document.getElementById("cloud-sign-in"),
+  cloudSignOut: document.getElementById("cloud-sign-out"),
+  cloudSyncNow: document.getElementById("cloud-sync-now"),
   goalValue: document.getElementById("goal-value"),
   todayValue: document.getElementById("today-value"),
   remainingValue: document.getElementById("remaining-value"),
@@ -154,6 +162,12 @@ let editingId = null;
 let editingDateKey = null;
 let editingFoodId = null;
 let editingCatalogFoodId = null;
+let cloudConfig = null;
+let cloudClient = null;
+let cloudSession = null;
+let cloudSyncTimer = null;
+let cloudSyncInFlight = false;
+let cloudStatusNote = "";
 
 function todayKey() {
   return toDateKeyInAppTimeZone(new Date());
@@ -635,6 +649,22 @@ function normalizeState(parsed) {
   };
 }
 
+function stateUpdatedAt(stateLike) {
+  const fallback = stateLike?.updatedAt;
+  const fromMeta = stateLike?.meta?.updatedAt;
+  const value = fromMeta || fallback;
+  const ts = Date.parse(String(value || ""));
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function persistLocalState(nextState, { updateTimestamp = true } = {}) {
+  if (updateTimestamp) {
+    nextState.meta = nextState.meta || {};
+    nextState.meta.updatedAt = nowIso();
+  }
+  localStorage.setItem(STORAGE_KEY_V5, JSON.stringify(nextState));
+}
+
 function loadState() {
   const v5 = localStorage.getItem(STORAGE_KEY_V5);
   if (v5) {
@@ -650,7 +680,7 @@ function loadState() {
     try {
       const migrated = normalizeState(JSON.parse(v4));
       migrated.meta.migrations = [...(migrated.meta.migrations || []), { from: 4, to: 5, migratedAt: nowIso(), note: "v4 to v5 food catalog and macros" }];
-      persistState(migrated);
+      persistLocalState(migrated);
       return migrated;
     } catch (error) {
       return defaultState();
@@ -660,7 +690,7 @@ function loadState() {
   if (v3) {
     try {
       const migrated = migrateV3ToV4(JSON.parse(v3));
-      persistState(migrated);
+      persistLocalState(migrated);
       return migrated;
     } catch (error) {
       return defaultState();
@@ -670,7 +700,7 @@ function loadState() {
   if (v2) {
     try {
       const migrated = migrateV2ToV4(JSON.parse(v2));
-      persistState(migrated);
+      persistLocalState(migrated);
       return migrated;
     } catch (error) {
       return defaultState();
@@ -680,7 +710,7 @@ function loadState() {
   if (v1) {
     try {
       const migrated = migrateV1ToV4(JSON.parse(v1));
-      persistState(migrated);
+      persistLocalState(migrated);
       return migrated;
     } catch (error) {
       return defaultState();
@@ -689,9 +719,267 @@ function loadState() {
   return defaultState();
 }
 
-function persistState(nextState) {
-  nextState.meta.updatedAt = nowIso();
-  localStorage.setItem(STORAGE_KEY_V5, JSON.stringify(nextState));
+function persistState(nextState, options = {}) {
+  const { updateTimestamp = true, skipCloud = false } = options;
+  persistLocalState(nextState, { updateTimestamp });
+  if (!skipCloud) queueCloudSave();
+}
+
+function cloudTimeLabel(input = new Date()) {
+  const date = input instanceof Date ? input : new Date(input);
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function renderCloudStatus() {
+  if (!elements.cloudSyncStatus || !elements.cloudSignIn || !elements.cloudSignOut || !elements.cloudSyncNow) return;
+  const configured = Boolean(cloudConfig?.supabaseUrl && cloudConfig?.supabaseAnonKey && cloudClient);
+  const signedIn = Boolean(cloudSession?.user?.id);
+
+  const defaultText = !configured
+    ? "Local-only mode. Configure Supabase + Vercel to enable account sync."
+    : signedIn
+      ? `Signed in as ${cloudSession.user.email || "account"}.`
+      : "Cloud configured. Sign in to sync data across devices.";
+  elements.cloudSyncStatus.textContent = cloudStatusNote || defaultText;
+
+  elements.cloudSignIn.disabled = !configured || signedIn || cloudSyncInFlight;
+  elements.cloudSignOut.disabled = !configured || !signedIn || cloudSyncInFlight;
+  elements.cloudSyncNow.disabled = !configured || !signedIn || cloudSyncInFlight;
+  if (elements.cloudEmail) {
+    elements.cloudEmail.disabled = !configured || signedIn || cloudSyncInFlight;
+  }
+  elements.cloudSignOut.classList.toggle("hidden", !signedIn);
+}
+
+async function loadCloudConfig() {
+  const inlineConfig = window.CALORIE_TRACKER_CONFIG || {};
+  let apiConfig = null;
+  try {
+    const response = await fetch(CLOUD_CONFIG_ENDPOINT, { cache: "no-store" });
+    if (response.ok) {
+      apiConfig = await response.json();
+    }
+  } catch (error) {
+    // Running local static server without API routes is expected.
+  }
+  const supabaseUrl = String(apiConfig?.supabaseUrl || inlineConfig.supabaseUrl || "").trim();
+  const supabaseAnonKey = String(apiConfig?.supabaseAnonKey || inlineConfig.supabaseAnonKey || "").trim();
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+  return { supabaseUrl, supabaseAnonKey };
+}
+
+async function upsertCloudStateRow() {
+  if (!cloudClient || !cloudSession?.user?.id) return false;
+  const payload = JSON.parse(JSON.stringify(state));
+  payload.meta = payload.meta || {};
+  payload.meta.schemaVersion = SCHEMA_VERSION;
+  payload.meta.updatedAt = payload.meta.updatedAt || nowIso();
+  const { error } = await cloudClient.from("app_states").upsert(
+    {
+      user_id: cloudSession.user.id,
+      schema_version: SCHEMA_VERSION,
+      updated_at: payload.meta.updatedAt,
+      state: payload,
+    },
+    { onConflict: "user_id" }
+  );
+  if (error) throw error;
+  return true;
+}
+
+async function pullCloudStateRow() {
+  if (!cloudClient || !cloudSession?.user?.id) return null;
+  const { data, error } = await cloudClient
+    .from("app_states")
+    .select("state,updated_at,schema_version")
+    .eq("user_id", cloudSession.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+function applyCloudState(nextState) {
+  state = normalizeState(nextState);
+  persistState(state, { updateTimestamp: false, skipCloud: true });
+  if (elements.appShell.classList.contains("hidden")) {
+    renderSetupFlow();
+  } else {
+    renderApp();
+  }
+}
+
+async function syncStateToCloud({ status = "Syncing to cloud..." } = {}) {
+  if (!cloudClient || !cloudSession?.user?.id || cloudSyncInFlight) return false;
+  cloudSyncInFlight = true;
+  cloudStatusNote = status;
+  renderCloudStatus();
+  try {
+    await upsertCloudStateRow();
+    cloudStatusNote = `Synced at ${cloudTimeLabel()}.`;
+    return true;
+  } catch (error) {
+    console.error("Cloud upload failed:", error);
+    cloudStatusNote = `Cloud sync failed: ${error.message || "Unknown error"}`;
+    return false;
+  } finally {
+    cloudSyncInFlight = false;
+    renderCloudStatus();
+  }
+}
+
+async function syncCloudState() {
+  if (!cloudClient || !cloudSession?.user?.id || cloudSyncInFlight) return false;
+  cloudSyncInFlight = true;
+  cloudStatusNote = "Checking cloud state...";
+  renderCloudStatus();
+  try {
+    const row = await pullCloudStateRow();
+    if (!row?.state) {
+      await upsertCloudStateRow();
+      cloudStatusNote = "Cloud initialized from this device.";
+      return true;
+    }
+
+    const remoteState = normalizeState(row.state);
+    const remoteUpdatedAt = Math.max(stateUpdatedAt(remoteState), Date.parse(String(row.updated_at || "")) || 0);
+    const localUpdatedAt = stateUpdatedAt(state);
+
+    if (remoteUpdatedAt > localUpdatedAt) {
+      applyCloudState(remoteState);
+      cloudStatusNote = `Loaded cloud data (${cloudTimeLabel(remoteUpdatedAt)}).`;
+      return true;
+    }
+
+    if (localUpdatedAt > remoteUpdatedAt) {
+      await upsertCloudStateRow();
+      cloudStatusNote = `Uploaded local changes (${cloudTimeLabel()}).`;
+      return true;
+    }
+
+    cloudStatusNote = `Already in sync (${cloudTimeLabel()}).`;
+    return true;
+  } catch (error) {
+    console.error("Cloud sync failed:", error);
+    cloudStatusNote = `Cloud sync failed: ${error.message || "Unknown error"}`;
+    return false;
+  } finally {
+    cloudSyncInFlight = false;
+    renderCloudStatus();
+  }
+}
+
+function queueCloudSave() {
+  if (!cloudClient || !cloudSession?.user?.id) return;
+  if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(() => {
+    cloudSyncTimer = null;
+    void syncStateToCloud({ status: "Syncing recent changes..." });
+  }, CLOUD_SYNC_DEBOUNCE_MS);
+}
+
+async function sendCloudSignInLink() {
+  if (!cloudClient) {
+    cloudStatusNote = "Cloud config not found. Add Supabase vars in Vercel.";
+    renderCloudStatus();
+    return;
+  }
+  const email = elements.cloudEmail?.value.trim();
+  if (!email) {
+    cloudStatusNote = "Enter an email to receive a sign-in link.";
+    renderCloudStatus();
+    return;
+  }
+  cloudSyncInFlight = true;
+  cloudStatusNote = "Sending sign-in link...";
+  renderCloudStatus();
+  try {
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { error } = await cloudClient.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+    if (error) throw error;
+    cloudStatusNote = "Check your email for the sign-in link.";
+  } catch (error) {
+    console.error("Sign-in link failed:", error);
+    cloudStatusNote = `Sign-in failed: ${error.message || "Unknown error"}`;
+  } finally {
+    cloudSyncInFlight = false;
+    renderCloudStatus();
+  }
+}
+
+async function signOutCloudSession() {
+  if (!cloudClient) return;
+  cloudSyncInFlight = true;
+  cloudStatusNote = "Signing out...";
+  renderCloudStatus();
+  try {
+    const { error } = await cloudClient.auth.signOut();
+    if (error) throw error;
+    cloudSession = null;
+    cloudStatusNote = "Signed out. Local-only mode.";
+  } catch (error) {
+    console.error("Sign-out failed:", error);
+    cloudStatusNote = `Sign-out failed: ${error.message || "Unknown error"}`;
+  } finally {
+    cloudSyncInFlight = false;
+    renderCloudStatus();
+  }
+}
+
+async function initCloudSync() {
+  renderCloudStatus();
+  if (!window.supabase || typeof window.supabase.createClient !== "function") {
+    cloudStatusNote = "Supabase SDK failed to load. Cloud sync is disabled.";
+    renderCloudStatus();
+    return;
+  }
+
+  cloudConfig = await loadCloudConfig();
+  if (!cloudConfig) {
+    renderCloudStatus();
+    return;
+  }
+
+  cloudClient = window.supabase.createClient(cloudConfig.supabaseUrl, cloudConfig.supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  });
+
+  const { data, error } = await cloudClient.auth.getSession();
+  if (error) {
+    console.error("Supabase session init failed:", error);
+    cloudStatusNote = `Cloud auth failed: ${error.message || "Unknown error"}`;
+    renderCloudStatus();
+    return;
+  }
+  cloudSession = data.session;
+
+  cloudClient.auth.onAuthStateChange((event, session) => {
+    cloudSession = session;
+    if (event === "SIGNED_IN") {
+      cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
+      renderCloudStatus();
+      void syncCloudState();
+      return;
+    }
+    if (event === "SIGNED_OUT") {
+      cloudStatusNote = "Signed out. Local-only mode.";
+      renderCloudStatus();
+      return;
+    }
+    renderCloudStatus();
+  });
+
+  if (cloudSession?.user?.id) {
+    cloudStatusNote = `Signed in as ${cloudSession.user.email || "account"}.`;
+    renderCloudStatus();
+    await syncCloudState();
+    return;
+  }
+  cloudStatusNote = "Cloud configured. Sign in to sync data across devices.";
+  renderCloudStatus();
 }
 
 function getActiveProfile() {
@@ -1732,6 +2020,7 @@ function renderApp() {
 
   elements.activeProfileLabel.textContent = `Profile: ${profile.name}`;
   elements.activePlanLabel.textContent = `Plan: ${plan.name}`;
+  renderCloudStatus();
   elements.goalValue.textContent = formatCalories(target);
   elements.todayValue.textContent = formatCalories(total);
   elements.remainingValue.textContent = formatCalories(remaining);
@@ -1990,6 +2279,27 @@ function runDiagnostics() {
     calculateBmr({ sex: "female", age: 30, heightFt: 5, heightIn: 7, currentWeightLbs: 154.3, dailyStepGoal: 8000 })
   );
   if (Math.abs(bmr - 1452) > 4) console.warn("BMR diagnostic drift:", bmr);
+}
+
+if (elements.cloudSignIn) {
+  elements.cloudSignIn.addEventListener("click", () => {
+    void sendCloudSignInLink();
+  });
+}
+if (elements.cloudSignOut) {
+  elements.cloudSignOut.addEventListener("click", () => {
+    void signOutCloudSession();
+  });
+}
+if (elements.cloudSyncNow) {
+  elements.cloudSyncNow.addEventListener("click", () => {
+    if (!cloudClient || !cloudSession?.user?.id) {
+      cloudStatusNote = "Sign in first to sync cloud data.";
+      renderCloudStatus();
+      return;
+    }
+    void syncCloudState();
+  });
 }
 
 elements.setupProfileSelect.addEventListener("change", () => setActiveProfile(elements.setupProfileSelect.value));
@@ -2453,3 +2763,5 @@ elements.modal.addEventListener("click", (event) => {
 
 runDiagnostics();
 showSetup();
+renderCloudStatus();
+void initCloudSync();

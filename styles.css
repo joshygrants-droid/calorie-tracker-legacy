@@ -83,6 +83,41 @@ p {
   font-size: 1.05rem;
 }
 
+.cloud-sync-panel {
+  margin-top: 16px;
+  border: 1px dashed var(--stroke);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.cloud-sync-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--ink);
+}
+
+.cloud-sync-status {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.cloud-sync-controls {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(3, auto);
+  gap: 8px;
+  align-items: end;
+}
+
+.cloud-email-label {
+  font-size: 0.85rem;
+}
+
+.cloud-email-label input {
+  margin-top: 6px;
+}
+
 .hero-card {
   background: var(--card);
   border-radius: 28px;
@@ -982,6 +1017,10 @@ select {
   }
 
   .hero-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-sync-controls {
     grid-template-columns: 1fr;
   }
 

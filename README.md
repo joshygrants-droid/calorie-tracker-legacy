@@ -21,9 +21,11 @@ A local-first calorie and weight tracking web app with adaptive calorie targets.
 ## Tech
 
 - Plain HTML/CSS/JavaScript
-- Browser `localStorage` persistence (no backend required)
+- Browser `localStorage` persistence (default, no backend required)
+- Optional Supabase Auth + Postgres-backed JSON state sync
+- Optional Vercel serverless config route (`/api/public-config`)
 
-## Run locally
+## Run locally (local-only)
 
 Any static server works. For example:
 
@@ -37,6 +39,33 @@ Then open:
 `http://localhost:4173`
 
 You can also open `index.html` directly in a browser, but a local server is recommended.
+
+## Optional local cloud testing
+
+1. Edit `config.local.js` with your Supabase values (or copy values from `config.local.example.js`).
+2. In Supabase SQL Editor, run `supabase/schema.sql`.
+3. Open the app and use the **Cloud sync** panel (email magic link sign-in).
+
+If `config.local.js` has empty values, the app stays in local-only mode.
+
+## Deploy to production (Vercel + Supabase)
+
+1. Create a Supabase project.
+2. Run `/Users/joshsmith/calorie-tracker-legacy/supabase/schema.sql` in Supabase SQL Editor.
+3. In Supabase Auth settings:
+   - Enable Email provider (magic links).
+   - Add redirect URLs for your environments (at minimum `http://localhost:4173` and your Vercel domain).
+4. Import this repo into Vercel.
+5. Add environment variables in Vercel (Production/Preview/Development):
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+6. Deploy.
+7. Open the app, sign in from the **Cloud sync** panel, and click **Sync now** once to initialize cloud state.
+
+The app will:
+- Keep localStorage as a fallback.
+- Auto-save to cloud after local changes when signed in.
+- Resolve startup conflicts by preferring the newer copy (local vs cloud `updatedAt`).
 
 ## Data model overview
 
@@ -55,4 +84,3 @@ You can also open `index.html` directly in a browser, but a local server is reco
 
 - JavaScript syntax check: `node --check app.js`
 - Lint diagnostics in editor: no reported issues
-

@@ -139,6 +139,21 @@
               <span id="active-profile-label">Profile</span> · <span id="active-plan-label">Plan</span>
             </p>
             <button class="ghost" id="switch-setup" type="button">Switch profile or plan</button>
+            <section class="cloud-sync-panel" id="cloud-sync-panel">
+              <p class="cloud-sync-title">Cloud sync</p>
+              <p id="cloud-sync-status" class="cloud-sync-status">
+                Local-only mode. Configure Supabase + Vercel to enable account sync.
+              </p>
+              <div class="cloud-sync-controls">
+                <label class="cloud-email-label">
+                  Email
+                  <input id="cloud-email" type="email" placeholder="you@example.com" autocomplete="email" />
+                </label>
+                <button class="ghost" id="cloud-sign-in" type="button">Email sign-in link</button>
+                <button class="ghost hidden" id="cloud-sign-out" type="button">Sign out</button>
+                <button class="ghost" id="cloud-sync-now" type="button">Sync now</button>
+              </div>
+            </section>
           </div>
           <div class="hero-card">
             <div class="ring-row">
@@ -666,6 +681,8 @@
       </form>
     </dialog>
 
+    <script src="config.local.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
   </body>
 </html>
