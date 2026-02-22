@@ -432,6 +432,62 @@ button {
   margin-top: 14px;
 }
 
+.weight-milestone-badge {
+  margin-top: 12px;
+  border: 1px dashed var(--stroke);
+  border-radius: 16px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  background: linear-gradient(180deg, #fffdf7, #fff9ef);
+}
+
+.weight-milestone-art {
+  display: grid;
+  place-items: center;
+}
+
+.weight-milestone-badge .milestone-sticker {
+  width: 90px;
+  height: 90px;
+  animation: none;
+}
+
+.weight-milestone-badge .milestone-burst {
+  inset: 12px;
+  box-shadow:
+    0 0 0 5px #ffffff,
+    0 6px 14px rgba(23, 21, 20, 0.14);
+}
+
+.weight-milestone-badge .milestone-sticker svg {
+  width: 76px;
+  height: 76px;
+}
+
+.weight-milestone-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.weight-milestone-title {
+  margin-top: 2px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.weight-milestone-meta {
+  margin-top: 3px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .weight-trend svg {
   width: 100%;
   height: 170px;
@@ -473,6 +529,7 @@ button {
 .steps-panel-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  grid-template-rows: auto auto;
   gap: 14px;
 }
 
@@ -498,20 +555,29 @@ button {
 }
 
 .steps-heatmap {
-  margin-top: 10px;
+  margin-top: 6px;
   border-top: 1px dashed var(--stroke);
-  padding-top: 10px;
+  padding-top: 14px;
+  min-height: 320px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.steps-heatmap-full {
+  grid-column: 1 / -1;
 }
 
 .steps-heatmap-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 280px;
 }
 
 .steps-heatmap-cell {
-  height: 16px;
-  border-radius: 5px;
+  height: 100%;
+  border-radius: 6px;
   background: #ece6de;
 }
 
@@ -683,6 +749,112 @@ select {
   margin-top: 16px;
 }
 
+.milestone-modal .modal-actions {
+  justify-content: center;
+}
+
+.milestone-content {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.milestone-icon {
+  width: 168px;
+  height: 168px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+}
+
+.milestone-emoji {
+  font-size: 5rem;
+  line-height: 1;
+  filter: drop-shadow(0 6px 10px rgba(23, 21, 20, 0.18));
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.milestone-emoji-count {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.weight-milestone-badge .milestone-emoji {
+  font-size: 3.4rem;
+  filter: drop-shadow(0 3px 6px rgba(23, 21, 20, 0.14));
+}
+
+.weight-milestone-badge .milestone-emoji-count {
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+}
+
+.milestone-sticker {
+  width: 152px;
+  height: 152px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  animation: milestone-pop 420ms ease-out both;
+}
+
+.milestone-burst {
+  position: absolute;
+  inset: 16px;
+  border-radius: 999px;
+  background: radial-gradient(circle, #fffbe8 20%, #ffe6a6 52%, #ffd98a 100%);
+  box-shadow:
+    0 0 0 8px #ffffff,
+    0 10px 24px rgba(23, 21, 20, 0.18);
+  transform: rotate(-10deg);
+  opacity: 0.55;
+}
+
+.milestone-icon svg {
+  width: 124px;
+  height: 124px;
+  display: block;
+  z-index: 1;
+  filter: saturate(1.18) contrast(1.04) drop-shadow(0 5px 6px rgba(23, 21, 20, 0.15));
+}
+
+.milestone-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+@keyframes milestone-pop {
+  from {
+    transform: translateY(6px) scale(0.9) rotate(-3deg);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateY(0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.milestone-modal h3 {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  color: var(--ink);
+}
+
+.milestone-modal p {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.milestone-equivalent {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .date-controls {
   display: flex;
   align-items: center;
@@ -811,6 +983,20 @@ select {
 
   .steps-panel-grid {
     grid-template-columns: 1fr;
+  }
+
+  .steps-heatmap {
+    min-height: 250px;
+  }
+
+  .steps-heatmap-grid {
+    min-height: 220px;
+  }
+
+  .weight-milestone-badge {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
   }
 
   .log-head {

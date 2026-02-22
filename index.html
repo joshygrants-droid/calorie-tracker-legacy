@@ -340,6 +340,7 @@
                 <span id="weight-to-goal" class="stat-value">—</span>
               </div>
             </div>
+            <div id="weight-milestone-badge" class="weight-milestone-badge"></div>
             <div id="weight-trend" class="weight-trend"></div>
             <details class="weight-history-details">
               <summary>View full weigh-in history</summary>
@@ -383,8 +384,8 @@
                   </div>
                 </div>
                 <div id="steps-sparkline" class="steps-sparkline"></div>
-                <div id="steps-heatmap" class="steps-heatmap"></div>
               </div>
+              <div id="steps-heatmap" class="steps-heatmap steps-heatmap-full"></div>
             </div>
           </section>
 
@@ -625,6 +626,20 @@
         </label>
         <div class="modal-actions">
           <button class="primary" id="custom-food-save" type="submit">Save food</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="weight-milestone-modal" class="modal milestone-modal">
+      <form method="dialog">
+        <div class="milestone-content">
+          <div id="milestone-icon" class="milestone-icon"></div>
+          <h3 id="milestone-title">Congrats!</h3>
+          <p id="milestone-message"></p>
+          <p id="milestone-equivalent" class="milestone-equivalent"></p>
+        </div>
+        <div class="modal-actions">
+          <button class="primary" type="submit">Awesome!</button>
         </div>
       </form>
     </dialog>
