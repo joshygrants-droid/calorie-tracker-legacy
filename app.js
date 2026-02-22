@@ -4,6 +4,9 @@ const STORAGE_KEY_V3 = "calorie-tracker-v3";
 const STORAGE_KEY_V2 = "calorie-tracker-v2";
 const STORAGE_KEY_V1 = "calorie-tracker-v1";
 const STORAGE_KEY_CLOUD_LAST_SYNC = "calorie-tracker-cloud-last-sync-v1";
+const STORAGE_KEY_VIEW_PREFERENCE = "calorie-tracker-view-preference-v1";
+const VIEW_SETUP = "setup";
+const VIEW_DASHBOARD = "dashboard";
 const SCHEMA_VERSION = 5;
 const DEFAULT_CALORIES = 2000;
 
@@ -753,6 +756,40 @@ function requiresCloudSignInForSetup() {
   return configured && !signedIn && !allowLocalWithoutSignIn;
 }
 
+function getViewPreference() {
+  try {
+    const value = localStorage.getItem(STORAGE_KEY_VIEW_PREFERENCE);
+    return value === VIEW_SETUP ? VIEW_SETUP : VIEW_DASHBOARD;
+  } catch (error) {
+    return VIEW_DASHBOARD;
+  }
+}
+
+function setViewPreference(nextView) {
+  if (nextView !== VIEW_SETUP && nextView !== VIEW_DASHBOARD) return;
+  try {
+    localStorage.setItem(STORAGE_KEY_VIEW_PREFERENCE, nextView);
+  } catch (error) {
+    // Ignore storage failures (private mode, quota, etc).
+  }
+}
+
+function hasActiveProfileAndPlanSelection() {
+  const profile = state?.profiles?.[state?.activeProfileId];
+  if (!profile) return false;
+  return Boolean(profile?.plans?.[profile.activePlanId]);
+}
+
+function openPreferredView() {
+  const wantsDashboard = getViewPreference() === VIEW_DASHBOARD;
+  const canOpenDashboard = wantsDashboard && hasActiveProfileAndPlanSelection() && !requiresCloudSignInForSetup();
+  if (canOpenDashboard) {
+    showApp({ persistPreference: false });
+    return;
+  }
+  showSetup({ persistPreference: false });
+}
+
 function updateSetupAccessState() {
   if (!elements.setupFlow) return;
   const locked = requiresCloudSignInForSetup();
@@ -1107,6 +1144,7 @@ async function initCloudSync() {
     allowLocalWithoutSignIn = true;
     cloudStatusNote = "Supabase SDK failed to load. Cloud sync is disabled.";
     renderCloudStatus();
+    openPreferredView();
     return;
   }
 
@@ -1114,6 +1152,7 @@ async function initCloudSync() {
   if (!cloudConfig) {
     allowLocalWithoutSignIn = true;
     renderCloudStatus();
+    openPreferredView();
     return;
   }
 
@@ -1131,6 +1170,7 @@ async function initCloudSync() {
     allowLocalWithoutSignIn = true;
     cloudStatusNote = `Cloud auth failed: ${error.message || "Unknown error"}`;
     renderCloudStatus();
+    openPreferredView();
     return;
   }
   cloudSession = data.session;
@@ -1145,7 +1185,9 @@ async function initCloudSync() {
       cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
       renderCloudStatus();
       startCloudAutoPull();
-      void syncCloudState();
+      void syncCloudState().finally(() => {
+        openPreferredView();
+      });
       return;
     }
     if (event === "SIGNED_OUT") {
@@ -1156,6 +1198,7 @@ async function initCloudSync() {
       setCloudPanelCollapsed(false);
       cloudStatusNote = "Signed out. Local-only mode.";
       renderCloudStatus();
+      openPreferredView();
       return;
     }
     renderCloudStatus();
@@ -1170,6 +1213,7 @@ async function initCloudSync() {
     renderCloudStatus();
     startCloudAutoPull();
     await syncCloudState();
+    openPreferredView();
     return;
   }
   allowLocalWithoutSignIn = false;
@@ -1179,6 +1223,7 @@ async function initCloudSync() {
   setCloudPanelCollapsed(false);
   cloudStatusNote = "Sign in to load cloud data before profile setup.";
   renderCloudStatus();
+  openPreferredView();
 }
 
 function getActiveProfile() {
@@ -2093,18 +2138,22 @@ function renderWeightTrend(weightsDesc, targetWeightLbs, projection) {
     </div>`;
 }
 
-function showApp() {
+function showApp(options = {}) {
+  const { persistPreference = true } = options;
   elements.setupFlow.classList.add("hidden");
   elements.appShell.classList.remove("hidden");
   selectedDateKey = todayKey();
   elements.weightForm.querySelector("#weight-date").value = todayKey();
   elements.stepsForm.querySelector("#steps-date").value = todayKey();
+  if (persistPreference) setViewPreference(VIEW_DASHBOARD);
   renderApp();
 }
 
-function showSetup() {
+function showSetup(options = {}) {
+  const { persistPreference = true } = options;
   elements.appShell.classList.add("hidden");
   elements.setupFlow.classList.remove("hidden");
+  if (persistPreference) setViewPreference(VIEW_SETUP);
   renderSetupFlow();
 }
 
@@ -2986,6 +3035,6 @@ elements.modal.addEventListener("click", (event) => {
 });
 
 runDiagnostics();
-showSetup();
+showSetup({ persistPreference: false });
 renderCloudStatus();
 void initCloudSync();
