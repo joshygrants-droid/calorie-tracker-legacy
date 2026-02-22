@@ -10,6 +10,9 @@ A local-first calorie and weight tracking web app with adaptive calorie targets.
 - Supports men and women with sex-specific BMR and safety floors
 - Tracks weight check-ins and updates recommendations from latest weight
 - Tracks daily step actuals and compares expected vs actual calorie budget
+- Supports reusable food memory with local food catalog + recent selections
+- Supports favorites and meal templates for repeat logging
+- Tracks macros (protein/carbs/fat) in food entries
 - Logs food by date/meal with edit/delete support
 - Preserves historical entries and shows trend/archive summaries
 - Migrates legacy data from `calorie-tracker-v1`/`calorie-tracker-v2`/`calorie-tracker-v3` to `calorie-tracker-v4`
@@ -41,6 +44,8 @@ You can also open `index.html` directly in a browser, but a local server is reco
 - `profiles`: named saved profiles with independent logs/history
 - `plans`: goal + metabolic plans nested under each profile, with active plan selection
 - `stepsByDay`: date-keyed actual step logs for daily budget adjustments
+- `foodCatalog`: reusable foods with macros and usage stats
+- `recentFoodIds`: ranked recent foods for quick selection
 - `foodLogs`: entries by `YYYY-MM-DD`
 - `weights`: dated weight check-ins
 - `historyIndex`: per-day totals for fast archive rendering

@@ -44,8 +44,25 @@
               </select>
             </label>
             <label>
-              Age
-              <input id="setup-profile-age" type="number" min="13" max="100" step="1" required />
+              Birth year
+              <input id="setup-profile-birth-year" type="number" min="1900" max="2100" step="1" required />
+            </label>
+            <label>
+              Birth month
+              <select id="setup-profile-birth-month" required>
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
             </label>
             <label>
               Height (ft)
@@ -123,14 +140,28 @@
             <button class="ghost" id="switch-setup" type="button">Switch profile or plan</button>
           </div>
           <div class="hero-card">
-            <div class="ring" aria-hidden="true">
-              <svg viewBox="0 0 120 120">
-                <circle class="ring-track" cx="60" cy="60" r="52"></circle>
-                <circle class="ring-progress" cx="60" cy="60" r="52"></circle>
-              </svg>
-              <div class="ring-label">
-                <span id="ring-percent">0%</span>
-                <span class="ring-caption">of daily target</span>
+            <div class="ring-row">
+              <div class="ring" aria-hidden="true">
+                <svg viewBox="0 0 120 120">
+                  <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+                  <circle class="ring-progress" cx="60" cy="60" r="52"></circle>
+                </svg>
+                <div class="ring-label">
+                  <span id="ring-percent">0%</span>
+                  <span class="ring-caption">of daily target</span>
+                </div>
+              </div>
+              <div class="ring macro-ring" aria-hidden="true">
+                <svg viewBox="0 0 120 120">
+                  <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+                  <circle id="macro-protein-ring" class="macro-segment protein" cx="60" cy="60" r="52"></circle>
+                  <circle id="macro-carbs-ring" class="macro-segment carbs" cx="60" cy="60" r="52"></circle>
+                  <circle id="macro-fat-ring" class="macro-segment fat" cx="60" cy="60" r="52"></circle>
+                </svg>
+                <div class="ring-label">
+                  <span class="macro-title">Macros</span>
+                  <span class="ring-caption macro-caption"><span class="macro-letter protein">P</span>/<span class="macro-letter carbs">C</span>/<span class="macro-letter fat">F</span> split</span>
+                </div>
               </div>
             </div>
             <div class="hero-stats">
@@ -151,8 +182,26 @@
                 <span id="top-meal" class="stat-value">—</span>
               </div>
             </div>
+            <div class="mini-stats hero-macro-stats">
+              <div>
+                <span class="stat-label">Protein</span>
+                <span id="macro-protein-total" class="stat-value">0g</span>
+              </div>
+              <div>
+                <span class="stat-label">Carbs</span>
+                <span id="macro-carbs-total" class="stat-value">0g</span>
+              </div>
+              <div>
+                <span class="stat-label">Fat</span>
+                <span id="macro-fat-total" class="stat-value">0g</span>
+              </div>
+            </div>
             <div class="hero-meta">
               <p id="recommendation-meta">Your calorie recommendation appears here.</p>
+              <details class="math-details">
+                <summary>Math details</summary>
+                <pre id="math-details-content">Daily formula details will appear here.</pre>
+              </details>
               <button class="ghost" id="reset-day" type="button">Reset selected day</button>
             </div>
           </div>
@@ -200,11 +249,20 @@
                 <span class="stat-label">Day deficit/surplus</span>
                 <span id="day-balance-value" class="stat-value">—</span>
               </article>
-              <article class="plan-card">
+              <article class="plan-card projection-card">
                 <span class="stat-label">Projected date</span>
                 <span id="projection-value" class="stat-value">—</span>
+                <span id="projection-confidence" class="projection-confidence">Trend confidence appears here.</span>
               </article>
             </div>
+
+            <form id="plan-steps-quick-form" class="inline-form quick-steps-form">
+              <label>
+                Steps for selected day
+                <input id="plan-steps-quick-value" type="number" min="0" max="100000" step="1" />
+              </label>
+              <button class="primary" type="submit">Update day steps</button>
+            </form>
 
             <details class="calc-details">
               <summary>How today is calculated</summary>
@@ -264,7 +322,29 @@
               </label>
               <button class="primary" type="submit">Add check-in</button>
             </form>
-            <div id="weight-history" class="history-list"></div>
+            <div class="mini-stats weight-mini-stats">
+              <div>
+                <span class="stat-label">Last check-in</span>
+                <span id="weight-last-checkin" class="stat-value">—</span>
+              </div>
+              <div>
+                <span class="stat-label">7-day change</span>
+                <span id="weight-7d-change" class="stat-value">—</span>
+              </div>
+              <div>
+                <span class="stat-label">30-day change</span>
+                <span id="weight-30d-change" class="stat-value">—</span>
+              </div>
+              <div>
+                <span class="stat-label">To goal</span>
+                <span id="weight-to-goal" class="stat-value">—</span>
+              </div>
+            </div>
+            <div id="weight-trend" class="weight-trend"></div>
+            <details class="weight-history-details">
+              <summary>View full weigh-in history</summary>
+              <div id="weight-history" class="history-list"></div>
+            </details>
           </section>
 
           <section class="panel">
@@ -272,18 +352,40 @@
               <h2>Daily steps</h2>
               <p>Log daily steps to adjust your actual calorie budget.</p>
             </div>
-            <form id="steps-form" class="inline-form">
-              <label>
-                Date
-                <input id="steps-date" type="date" required />
-              </label>
-              <label>
-                Steps
-                <input id="steps-value" type="number" min="0" max="100000" step="1" required />
-              </label>
-              <button class="primary" type="submit">Save steps</button>
-            </form>
-            <div id="steps-history" class="history-list"></div>
+            <div class="steps-panel-grid">
+              <div class="steps-panel-main">
+                <form id="steps-form" class="inline-form">
+                  <label>
+                    Date
+                    <input id="steps-date" type="date" required />
+                  </label>
+                  <label>
+                    Steps
+                    <input id="steps-value" type="number" min="0" max="100000" step="1" required />
+                  </label>
+                  <button class="primary" type="submit">Save steps</button>
+                </form>
+                <div id="steps-history" class="history-list"></div>
+              </div>
+              <div class="steps-panel-insights">
+                <div class="mini-stats steps-mini-stats">
+                  <div>
+                    <span class="stat-label">7-day avg steps</span>
+                    <span id="steps-7d-avg" class="stat-value">—</span>
+                  </div>
+                  <div>
+                    <span class="stat-label">Goal streak</span>
+                    <span id="steps-goal-streak" class="stat-value">—</span>
+                  </div>
+                  <div>
+                    <span class="stat-label">Today step calories</span>
+                    <span id="today-step-calories" class="stat-value">—</span>
+                  </div>
+                </div>
+                <div id="steps-sparkline" class="steps-sparkline"></div>
+                <div id="steps-heatmap" class="steps-heatmap"></div>
+              </div>
+            </div>
           </section>
 
           <section class="panel">
@@ -291,10 +393,39 @@
               <h2>Log food</h2>
               <p>Quickly add food selections to today or any selected day.</p>
             </div>
+            <details class="food-tools-details">
+              <summary>Saved foods, templates, and search</summary>
+              <div class="inline-form">
+                <label>
+                  Recent foods
+                  <select id="recent-food-select">
+                    <option value="">Select recent food</option>
+                  </select>
+                </label>
+                <label>
+                  Meal templates
+                  <select id="meal-template-select">
+                    <option value="">Select template</option>
+                  </select>
+                </label>
+                <label>
+                  Search foods
+                  <input type="text" id="food-search" placeholder="Search saved foods or type a new one" />
+                </label>
+                <button class="ghost" type="button" id="open-custom-food">New custom food</button>
+                <button class="ghost" type="button" id="favorite-selected-food">Favorite selected food</button>
+                <button class="ghost" type="button" id="edit-selected-food">Edit selected food</button>
+                <button class="ghost danger" type="button" id="delete-selected-food">Delete selected food</button>
+                <button class="ghost" type="button" id="create-meal-template">Save meal as template</button>
+                <button class="ghost" type="button" id="apply-meal-template">Add template to log</button>
+              </div>
+              <div id="food-search-results" class="history-list"></div>
+            </details>
             <form id="entry-form" class="form-grid">
+              <input type="hidden" id="selected-food-id" />
               <label>
-                Food name
-                <input type="text" id="food-name" placeholder="Turkey wrap" required />
+                Selected food
+                <input type="text" id="food-name" placeholder="Choose from search or type new food" required />
               </label>
               <label>
                 Meal
@@ -306,8 +437,24 @@
                 </select>
               </label>
               <label>
+                Servings
+                <input type="number" id="servings" min="0.1" step="0.1" value="1" required />
+              </label>
+              <label>
                 Calories
                 <input type="number" id="calories" min="0" step="1" placeholder="420" required />
+              </label>
+              <label>
+                Protein (g)
+                <input type="number" id="protein-g" min="0" step="0.1" value="0" />
+              </label>
+              <label>
+                Carbs (g)
+                <input type="number" id="carbs-g" min="0" step="0.1" value="0" />
+              </label>
+              <label>
+                Fat (g)
+                <input type="number" id="fat-g" min="0" step="0.1" value="0" />
               </label>
               <label>
                 Time
@@ -319,11 +466,14 @@
               </label>
               <button class="primary" type="submit">Add entry</button>
             </form>
-            <div class="tag-list" id="quick-adds">
-              <button type="button" data-calories="150">Energy bar +150</button>
-              <button type="button" data-calories="220">Latte +220</button>
-              <button type="button" data-calories="350">Smoothie +350</button>
-            </div>
+            <details class="food-tools-details">
+              <summary>Quick adds</summary>
+              <div class="tag-list" id="quick-adds">
+                <button type="button" data-calories="150">Energy bar +150</button>
+                <button type="button" data-calories="220">Latte +220</button>
+                <button type="button" data-calories="350">Smoothie +350</button>
+              </div>
+            </details>
           </section>
 
           <section class="panel full">
@@ -409,6 +559,18 @@
           <input type="number" id="edit-calories" min="0" step="1" required />
         </label>
         <label>
+          Protein (g)
+          <input type="number" id="edit-protein-g" min="0" step="0.1" value="0" />
+        </label>
+        <label>
+          Carbs (g)
+          <input type="number" id="edit-carbs-g" min="0" step="0.1" value="0" />
+        </label>
+        <label>
+          Fat (g)
+          <input type="number" id="edit-fat-g" min="0" step="0.1" value="0" />
+        </label>
+        <label>
           Time
           <input type="time" id="edit-time" />
         </label>
@@ -419,6 +581,70 @@
         <div class="modal-actions">
           <button class="primary" type="submit">Save changes</button>
           <button class="ghost danger" type="button" id="delete-entry">Delete entry</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="custom-food-modal" class="modal">
+      <form method="dialog" id="custom-food-form">
+        <div class="modal-header">
+          <h3 id="custom-food-title">Create custom food</h3>
+          <button class="ghost" type="button" id="close-custom-food">Close</button>
+        </div>
+        <label>
+          Food name
+          <input type="text" id="custom-food-name" required />
+        </label>
+        <label>
+          Brand (optional)
+          <input type="text" id="custom-food-brand" />
+        </label>
+        <label>
+          Serving size
+          <input type="text" id="custom-serving-size" placeholder="1 bowl (250g)" />
+        </label>
+        <label>
+          Calories
+          <input type="number" id="custom-calories" min="0" step="1" required />
+        </label>
+        <label>
+          Protein (g)
+          <input type="number" id="custom-protein-g" min="0" step="0.1" value="0" />
+        </label>
+        <label>
+          Carbs (g)
+          <input type="number" id="custom-carbs-g" min="0" step="0.1" value="0" />
+        </label>
+        <label>
+          Fat (g)
+          <input type="number" id="custom-fat-g" min="0" step="0.1" value="0" />
+        </label>
+        <label>
+          Barcode (optional)
+          <input type="text" id="custom-barcode" />
+        </label>
+        <div class="modal-actions">
+          <button class="primary" id="custom-food-save" type="submit">Save food</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="meal-template-modal" class="modal">
+      <form method="dialog" id="meal-template-form">
+        <div class="modal-header">
+          <h3>Save meal template</h3>
+          <button class="ghost" type="button" id="close-meal-template">Close</button>
+        </div>
+        <label>
+          Template name
+          <input type="text" id="meal-template-name" required />
+        </label>
+        <label>
+          Foods (comma separated)
+          <input type="text" id="meal-template-food-ids" readonly />
+        </label>
+        <div class="modal-actions">
+          <button class="primary" type="submit">Save template</button>
         </div>
       </form>
     </dialog>
