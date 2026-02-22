@@ -99,11 +99,33 @@ p {
 
 .cloud-sync-title {
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 0;
   color: var(--ink);
 }
 
+.cloud-sync-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cloud-sync-toggle {
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+}
+
+.cloud-sync-summary {
+  margin-top: 8px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
 .cloud-sync-status {
+  margin-top: 8px;
   font-size: 0.9rem;
   line-height: 1.45;
 }

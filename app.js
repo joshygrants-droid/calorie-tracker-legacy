@@ -53,6 +53,11 @@ const elements = {
   activeProfileLabel: document.getElementById("active-profile-label"),
   activePlanLabel: document.getElementById("active-plan-label"),
   cloudSyncPanel: document.getElementById("cloud-sync-panel"),
+  cloudSyncContent: document.getElementById("cloud-sync-content"),
+  cloudSyncSummary: document.getElementById("cloud-sync-summary"),
+  cloudSyncToggle: document.getElementById("cloud-sync-toggle"),
+  cloudSyncToggleLabel: document.getElementById("cloud-sync-toggle-label"),
+  cloudSyncToggleArrow: document.getElementById("cloud-sync-toggle-arrow"),
   cloudSyncStatus: document.getElementById("cloud-sync-status"),
   cloudSyncLast: document.getElementById("cloud-sync-last"),
   cloudEmail: document.getElementById("cloud-email"),
@@ -178,6 +183,8 @@ let cloudLastAutoPullAt = 0;
 let allowLocalWithoutSignIn = false;
 let cloudLastSyncAt = null;
 let cloudLastSyncKind = "";
+let cloudPanelCollapsed = false;
+let cloudPanelUserSet = false;
 
 function todayKey() {
   return toDateKeyInAppTimeZone(new Date());
@@ -802,6 +809,27 @@ function cloudLastSyncLabel() {
   return cloudLastSyncKind ? `Last sync: ${time} (${cloudLastSyncKind})` : `Last sync: ${time}`;
 }
 
+function setCloudPanelCollapsed(collapsed, options = {}) {
+  const { userInitiated = false } = options;
+  cloudPanelCollapsed = Boolean(collapsed);
+  if (userInitiated) cloudPanelUserSet = true;
+  if (elements.cloudSyncContent) {
+    elements.cloudSyncContent.classList.toggle("hidden", cloudPanelCollapsed);
+  }
+  if (elements.cloudSyncSummary) {
+    elements.cloudSyncSummary.classList.toggle("hidden", !cloudPanelCollapsed);
+  }
+  if (elements.cloudSyncToggle) {
+    elements.cloudSyncToggle.setAttribute("aria-expanded", String(!cloudPanelCollapsed));
+  }
+  if (elements.cloudSyncToggleLabel) {
+    elements.cloudSyncToggleLabel.textContent = cloudPanelCollapsed ? "Show" : "Hide";
+  }
+  if (elements.cloudSyncToggleArrow) {
+    elements.cloudSyncToggleArrow.textContent = cloudPanelCollapsed ? "▾" : "▴";
+  }
+}
+
 function renderCloudStatus() {
   if (!elements.cloudSyncStatus || !elements.cloudSignIn || !elements.cloudSignOut || !elements.cloudSyncNow) return;
   const configured = Boolean(cloudConfig?.supabaseUrl && cloudConfig?.supabaseAnonKey);
@@ -831,6 +859,18 @@ function renderCloudStatus() {
   }
   if (elements.cloudSyncLast) {
     elements.cloudSyncLast.textContent = cloudLastSyncLabel();
+  }
+  if (elements.cloudSyncSummary) {
+    const syncSnippet = cloudLastSyncLabel().replace("Last sync: ", "");
+    const summaryText = signedIn
+      ? `Signed in as ${cloudSession?.user?.email || "account"} · ${syncSnippet}`
+      : allowLocalWithoutSignIn
+        ? "Local-only mode active"
+        : "Sign in required for cloud-first setup";
+    elements.cloudSyncSummary.textContent = summaryText;
+  }
+  if (!cloudPanelUserSet) {
+    setCloudPanelCollapsed(signedIn);
   }
   updateSetupAccessState();
 }
@@ -1049,6 +1089,8 @@ async function signOutCloudSession() {
     allowLocalWithoutSignIn = true;
     stopCloudAutoPull();
     clearCloudLastSyncRuntime();
+    cloudPanelUserSet = false;
+    setCloudPanelCollapsed(false);
     cloudStatusNote = "Signed out. Local-only mode.";
   } catch (error) {
     console.error("Sign-out failed:", error);
@@ -1098,6 +1140,8 @@ async function initCloudSync() {
     if (event === "SIGNED_IN") {
       allowLocalWithoutSignIn = false;
       hydrateCloudLastSyncForUser(session?.user?.id);
+      cloudPanelUserSet = false;
+      setCloudPanelCollapsed(true);
       cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
       renderCloudStatus();
       startCloudAutoPull();
@@ -1108,6 +1152,8 @@ async function initCloudSync() {
       allowLocalWithoutSignIn = true;
       stopCloudAutoPull();
       clearCloudLastSyncRuntime();
+      cloudPanelUserSet = false;
+      setCloudPanelCollapsed(false);
       cloudStatusNote = "Signed out. Local-only mode.";
       renderCloudStatus();
       return;
@@ -1118,6 +1164,8 @@ async function initCloudSync() {
   if (cloudSession?.user?.id) {
     allowLocalWithoutSignIn = false;
     hydrateCloudLastSyncForUser(cloudSession.user.id);
+    cloudPanelUserSet = false;
+    setCloudPanelCollapsed(true);
     cloudStatusNote = `Signed in as ${cloudSession.user.email || "account"}.`;
     renderCloudStatus();
     startCloudAutoPull();
@@ -1127,6 +1175,8 @@ async function initCloudSync() {
   allowLocalWithoutSignIn = false;
   stopCloudAutoPull();
   clearCloudLastSyncRuntime();
+  cloudPanelUserSet = false;
+  setCloudPanelCollapsed(false);
   cloudStatusNote = "Sign in to load cloud data before profile setup.";
   renderCloudStatus();
 }
@@ -2451,9 +2501,16 @@ if (elements.cloudSyncNow) {
     void syncCloudState();
   });
 }
+if (elements.cloudSyncToggle) {
+  elements.cloudSyncToggle.addEventListener("click", () => {
+    setCloudPanelCollapsed(!cloudPanelCollapsed, { userInitiated: true });
+  });
+}
 if (elements.cloudLocalOnly) {
   elements.cloudLocalOnly.addEventListener("click", () => {
     allowLocalWithoutSignIn = true;
+    cloudPanelUserSet = false;
+    setCloudPanelCollapsed(false);
     cloudStatusNote = "Local-only mode active on this device.";
     renderCloudStatus();
   });
