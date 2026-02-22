@@ -20,15 +20,15 @@ const MACRO_COLORS = {
 const WEIGHT_LOSS_MILESTONES = [
   { lbs: 2, object: "about one pineapple", emoji: "🍍" },
   { lbs: 5, object: "about one laptop", emoji: "💻" },
-  { lbs: 10, object: "about two laptops", emoji: "💻💻" },
-  { lbs: 15, object: "about three laptops", emoji: "💻💻💻" },
-  { lbs: 20, object: "about four laptops", emoji: "💻💻💻💻" },
-  { lbs: 25, object: "about five laptops", emoji: "💻💻💻💻💻" },
-  { lbs: 30, object: "about six laptops", emoji: "💻💻💻💻💻💻" },
-  { lbs: 35, object: "about seven laptops", emoji: "💻💻💻💻💻💻💻" },
-  { lbs: 40, object: "about eight laptops", emoji: "💻💻💻💻💻💻💻💻" },
-  { lbs: 45, object: "about nine laptops", emoji: "💻💻💻💻💻💻💻💻💻" },
-  { lbs: 50, object: "about ten laptops", emoji: "💻💻💻💻💻💻💻💻💻💻" },
+  { lbs: 10, object: "about one watermelon", emoji: "🍉" },
+  { lbs: 15, object: "about one carry-on suitcase", emoji: "🧳" },
+  { lbs: 20, object: "about one medium dog", emoji: "🐕" },
+  { lbs: 25, object: "about one loaded backpack", emoji: "🎒" },
+  { lbs: 30, object: "about one bowling ball", emoji: "🎳" },
+  { lbs: 35, object: "about one bike", emoji: "🚲" },
+  { lbs: 40, object: "about one motorcycle", emoji: "🏍️" },
+  { lbs: 45, object: "about one motor scooter", emoji: "🛵" },
+  { lbs: 50, object: "about one panda", emoji: "🐼" },
 ];
 
 const elements = {
@@ -89,6 +89,7 @@ const elements = {
   weight30dChange: document.getElementById("weight-30d-change"),
   weightToGoal: document.getElementById("weight-to-goal"),
   weightMilestoneBadge: document.getElementById("weight-milestone-badge"),
+  resetMilestones: document.getElementById("reset-milestones"),
   weightTrend: document.getElementById("weight-trend"),
   stepsForm: document.getElementById("steps-form"),
   stepsHistory: document.getElementById("steps-history"),
@@ -722,21 +723,29 @@ function createProfile(name) {
   state.profiles[profile.id] = profile;
   state.activeProfileId = profile.id;
   persistState(state);
+  return profile;
 }
 
-function deleteActiveProfile() {
+function deleteActiveProfile(profileId = state.activeProfileId) {
   const profileIds = Object.keys(state.profiles);
-  if (profileIds.length <= 1) {
-    alert("You need at least one profile.");
-    return;
-  }
+  const targetId = state.profiles[profileId] ? profileId : state.activeProfileId;
+  const active = state.profiles[targetId];
+  if (!active) return;
+  const isLastProfile = profileIds.length <= 1;
+  const prompt = isLastProfile
+    ? `Are you sure you want to delete profile "${active.name}"?\n\nThis action cannot be undone. A fresh default profile will be created automatically.`
+    : `Are you sure you want to delete profile "${active.name}"?\n\nThis action cannot be undone and will remove all plans and history for this profile.`;
+  if (!confirm(prompt)) return;
 
-  const active = getActiveProfile();
-  if (!confirm(`Delete profile "${active.name}" and all of its plans/history?`)) return;
-
-  delete state.profiles[active.id];
+  delete state.profiles[targetId];
   const remaining = Object.keys(state.profiles);
-  state.activeProfileId = remaining[0];
+  if (!remaining.length) {
+    const fallback = createDefaultProfile("My Profile");
+    state.profiles[fallback.id] = fallback;
+    state.activeProfileId = fallback.id;
+  } else {
+    state.activeProfileId = remaining.includes(state.activeProfileId) ? state.activeProfileId : remaining[0];
+  }
   persistState(state);
 }
 
@@ -747,6 +756,7 @@ function createPlan(name) {
   profile.activePlanId = plan.id;
   profile.updatedAt = nowIso();
   persistState(state);
+  return plan;
 }
 
 function updateRing(percent) {
@@ -1425,43 +1435,9 @@ function renderStepsHeatmap(stepsByDay, stepGoal) {
     <div class="steps-heatmap-meta">Goal hit days (last 35): ${hitCount}/35</div>`;
 }
 
-function renderMilestoneClipArt(kind) {
-  const art = {
-    pineapple:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#fff4dc"/><path d="M70 12l8 18-8 8-8-8zM57 18l8 14-9 10-10-9zM83 18l10 14-10 10-9-10zM70 26l16 14-16 9-16-9z" fill="#2f9e44"/><path d="M70 38c20 0 34 18 34 40 0 27-15 45-34 45s-34-18-34-45c0-22 14-40 34-40z" fill="#f2b230"/><path d="M52 58l36 36M88 58L52 94M46 74h48M49 88h42" stroke="#c7861f" stroke-width="4" stroke-linecap="round"/><path d="M70 38c20 0 34 18 34 40 0 27-15 45-34 45s-34-18-34-45c0-22 14-40 34-40z" fill="none" stroke="#cc8d25" stroke-width="3"/></svg>',
-    spellbook:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#ece7ff"/><rect x="30" y="34" width="80" height="76" rx="8" fill="#533b8a"/><rect x="39" y="44" width="62" height="56" rx="5" fill="#fff"/><path d="M70 54l4 8 8 4-8 4-4 8-4-8-8-4 8-4z" fill="#f0b400"/><rect x="30" y="34" width="10" height="76" fill="#3a2a62"/></svg>',
-    cat:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#ffe8ef"/><circle cx="70" cy="76" r="32" fill="#f2c39b"/><path d="M46 56l-8-16 18 8zM94 56l8-16-18 8z" fill="#f2c39b"/><circle cx="58" cy="74" r="4"/><circle cx="82" cy="74" r="4"/><path d="M70 79l5 5-5 3-5-3z" fill="#db7b87"/><rect x="44" y="93" width="52" height="13" rx="6" fill="#6db6ff"/></svg>',
-    carryon:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#e9f5ff"/><rect x="42" y="32" width="56" height="10" rx="5" fill="#4f5966"/><rect x="30" y="40" width="80" height="72" rx="12" fill="#4f7ac8"/><rect x="42" y="56" width="56" height="8" rx="4" fill="#8bb0ea"/><circle cx="46" cy="116" r="6" fill="#334"/><circle cx="94" cy="116" r="6" fill="#334"/></svg>',
-    corgi:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#fff0df"/><ellipse cx="70" cy="86" rx="38" ry="24" fill="#d98a45"/><circle cx="70" cy="58" r="22" fill="#d98a45"/><path d="M52 48l-10-14 16 8zM88 48l10-14-16 8z" fill="#b06e36"/><circle cx="62" cy="58" r="3"/><circle cx="78" cy="58" r="3"/><ellipse cx="70" cy="66" rx="9" ry="7" fill="#fff"/></svg>',
-    vinyl:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#eaf8ff"/><circle cx="56" cy="74" r="30" fill="#1f2937"/><circle cx="56" cy="74" r="14" fill="#93c5fd"/><circle cx="98" cy="76" r="26" fill="#111827"/><circle cx="98" cy="76" r="12" fill="#f472b6"/></svg>',
-    watermelon:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#ffe8e8"/><path d="M30 90a40 40 0 0 1 80 0z" fill="#ef476f"/><path d="M30 90a40 40 0 0 1 80 0" stroke="#2f9e44" stroke-width="8" fill="none"/><circle cx="54" cy="78" r="2.5"/><circle cx="70" cy="72" r="2.5"/><circle cx="86" cy="78" r="2.5"/></svg>',
-    treasure:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#fff4df"/><rect x="32" y="62" width="76" height="44" rx="8" fill="#8b5a2b"/><path d="M32 62q38-34 76 0" fill="#b3742f"/><circle cx="52" cy="84" r="5" fill="#ffd166"/><circle cx="70" cy="82" r="5" fill="#ffd166"/><circle cx="88" cy="84" r="5" fill="#ffd166"/></svg>',
-    backpack:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#eaf7ea"/><rect x="38" y="40" width="64" height="74" rx="14" fill="#2f7d53"/><rect x="50" y="56" width="40" height="20" rx="8" fill="#86c39a"/><rect x="46" y="80" width="48" height="24" rx="8" fill="#3d9363"/><path d="M52 40v-8a18 18 0 0 1 36 0v8" stroke="#1f5a3c" stroke-width="6" fill="none"/></svg>',
-    fridge:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#e6fbff"/><rect x="44" y="26" width="52" height="88" rx="8" fill="#9ed7e3"/><line x1="44" y1="68" x2="96" y2="68" stroke="#6eaebb" stroke-width="4"/><rect x="86" y="48" width="4" height="12" rx="2" fill="#4f7f89"/><rect x="86" y="80" width="4" height="12" rx="2" fill="#4f7f89"/></svg>',
-    punchingBag:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#ffeef0"/><line x1="26" y1="24" x2="114" y2="24" stroke="#475569" stroke-width="6"/><rect x="54" y="32" width="32" height="82" rx="14" fill="#d14343"/><rect x="61" y="52" width="18" height="8" rx="4" fill="#f8caca"/><path d="M98 76l18 10-18 10z" fill="#f59e0b"/></svg>',
-    arcade:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#f2edff"/><path d="M40 30h60l8 18v62H32V48z" fill="#4f46e5"/><rect x="48" y="42" width="44" height="20" rx="4" fill="#93c5fd"/><circle cx="56" cy="82" r="6" fill="#ef4444"/><circle cx="74" cy="82" r="6" fill="#22c55e"/><circle cx="92" cy="82" r="6" fill="#f59e0b"/></svg>',
-    tortoise:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#ebf8e9"/><ellipse cx="72" cy="80" rx="34" ry="24" fill="#4a8f53"/><circle cx="100" cy="78" r="10" fill="#76b27d"/><circle cx="104" cy="76" r="2"/><rect x="46" y="98" width="10" height="8" rx="4" fill="#76b27d"/><rect x="62" y="100" width="10" height="8" rx="4" fill="#76b27d"/><rect x="78" y="100" width="10" height="8" rx="4" fill="#76b27d"/></svg>',
-    motorcycle:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#eef7ff"/><circle cx="44" cy="94" r="14" fill="#1f2937"/><circle cx="96" cy="94" r="14" fill="#1f2937"/><path d="M44 94l18-20h20l14 20M62 74l10-14h14" stroke="#ef4444" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="78" y="58" width="16" height="8" rx="4" fill="#111827"/></svg>',
-    panda:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#f5f5f5"/><circle cx="70" cy="74" r="30" fill="#fff"/><circle cx="50" cy="52" r="10" fill="#111"/><circle cx="90" cy="52" r="10" fill="#111"/><ellipse cx="58" cy="74" rx="8" ry="11" fill="#111"/><ellipse cx="82" cy="74" rx="8" ry="11" fill="#111"/><circle cx="70" cy="84" r="6" fill="#111"/></svg>',
-    fallback:
-      '<svg viewBox="0 0 140 140" aria-hidden="true"><rect width="140" height="140" rx="28" fill="#fff6e6"/><circle cx="70" cy="70" r="34" fill="#f59e0b"/><path d="M70 46l8 16 18 3-13 13 3 18-16-8-16 8 3-18-13-13 18-3z" fill="#fff"/></svg>',
-  };
-  const svg = art[kind] || art.fallback;
-  return `<div class="milestone-sticker"><div class="milestone-burst" aria-hidden="true"></div>${svg}</div>`;
+function renderMilestoneClipArt(emoji) {
+  const symbol = String(emoji || "").trim() || "🎉";
+  return `<div class="milestone-emoji" role="img" aria-label="Milestone emoji">${symbol}</div>`;
 }
 
 function renderWeightMilestoneBadge(profile) {
@@ -1469,16 +1445,19 @@ function renderWeightMilestoneBadge(profile) {
   const seen = Array.isArray(profile?.weightLossMilestonesSeen) ? profile.weightLossMilestonesSeen : [];
   if (!seen.length) {
     elements.weightMilestoneBadge.innerHTML = "";
+    if (elements.resetMilestones) elements.resetMilestones.classList.add("hidden");
     return;
   }
+  if (elements.resetMilestones) elements.resetMilestones.classList.remove("hidden");
   const highestSeen = [...seen].sort((a, b) => b - a)[0];
   const milestone = WEIGHT_LOSS_MILESTONES.find((item) => item.lbs === highestSeen);
   if (!milestone) {
     elements.weightMilestoneBadge.innerHTML = "";
+    if (elements.resetMilestones) elements.resetMilestones.classList.add("hidden");
     return;
   }
   elements.weightMilestoneBadge.innerHTML = `
-    <div class="weight-milestone-art">${renderMilestoneClipArt(milestone.clipart)}</div>
+    <div class="weight-milestone-art">${renderMilestoneClipArt(milestone.emoji)}</div>
     <div class="weight-milestone-copy">
       <div class="weight-milestone-label">Latest milestone unlocked</div>
       <div class="weight-milestone-title">${milestone.lbs} lbs lost</div>
@@ -1508,7 +1487,7 @@ function checkWeightLossMilestones(profile, plan, weightsAsc) {
   persistState(state);
 
   if (elements.weightMilestoneModal && elements.milestoneIcon) {
-    elements.milestoneIcon.innerHTML = renderMilestoneClipArt(milestone.clipart);
+    elements.milestoneIcon.innerHTML = renderMilestoneClipArt(milestone.emoji);
     elements.milestoneTitle.textContent = `Congrats on losing ${milestone.lbs} pounds!`;
     elements.milestoneMessage.textContent = `That's amazing progress. Keep it up!`;
     elements.milestoneEquivalent.textContent = `That's the equivalent of ${milestone.object}.`;
@@ -1650,8 +1629,11 @@ function renderSetupFlow() {
     ? activePlan.metabolicPlan.manualOverrideCalories ?? ""
     : "";
 
-  elements.setupDeleteProfile.disabled = profiles.length <= 1;
-  elements.setupDeleteProfile.title = profiles.length <= 1 ? "At least one profile is required." : "";
+  elements.setupDeleteProfile.disabled = false;
+  elements.setupDeleteProfile.title =
+    profiles.length <= 1
+      ? "Deleting the last profile will create a fresh default profile."
+      : "Delete the currently selected profile.";
 }
 
 function calculateDayBudget(dateKey) {
@@ -1982,12 +1964,13 @@ elements.setupProfileSelect.addEventListener("change", () => setActiveProfile(el
 elements.setupCreateProfile.addEventListener("click", () => {
   const name = elements.setupNewProfileName.value.trim();
   if (!name) return;
-  createProfile(name);
+  const created = createProfile(name);
+  if (created?.id) setActiveProfile(created.id);
   elements.setupNewProfileName.value = "";
   renderSetupFlow();
 });
 elements.setupDeleteProfile.addEventListener("click", () => {
-  deleteActiveProfile();
+  deleteActiveProfile(elements.setupProfileSelect.value);
   renderSetupFlow();
 });
 elements.setupProfileForm.addEventListener("submit", (event) => {
@@ -2016,7 +1999,8 @@ elements.setupPlanSelect.addEventListener("change", () => setActivePlan(elements
 elements.setupCreatePlan.addEventListener("click", () => {
   const name = elements.setupNewPlanName.value.trim();
   if (!name) return;
-  createPlan(name);
+  const created = createPlan(name);
+  if (created?.id) setActivePlan(created.id);
   elements.setupNewPlanName.value = "";
   renderSetupFlow();
 });
@@ -2338,6 +2322,17 @@ elements.mealTemplateModal.addEventListener("click", (event) => {
 if (elements.weightMilestoneModal) {
   elements.weightMilestoneModal.addEventListener("click", (event) => {
     if (event.target === elements.weightMilestoneModal) elements.weightMilestoneModal.close();
+  });
+}
+if (elements.resetMilestones) {
+  elements.resetMilestones.addEventListener("click", () => {
+    if (!confirm("Reset all milestone progress and start over?")) return;
+    const profile = getActiveProfile();
+    profile.weightLossMilestonesSeen = [];
+    profile.updatedAt = nowIso();
+    persistState(state);
+    if (elements.weightMilestoneModal?.open) elements.weightMilestoneModal.close();
+    renderApp();
   });
 }
 
