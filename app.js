@@ -13,6 +13,8 @@ const PROJECTION_LOG_WINDOW_DAYS = 28;
 const PROJECTION_WEIGHT_LOOKBACK = 8;
 const CLOUD_CONFIG_ENDPOINT = "/api/public-config";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
+const CLOUD_AUTO_PULL_INTERVAL_MS = 45000;
+const CLOUD_AUTO_PULL_MIN_GAP_MS = 12000;
 const MACRO_COLORS = {
   protein: "#00c853",
   carbs: "#2979ff",
@@ -168,6 +170,8 @@ let cloudSession = null;
 let cloudSyncTimer = null;
 let cloudSyncInFlight = false;
 let cloudStatusNote = "";
+let cloudAutoPullIntervalId = null;
+let cloudLastAutoPullAt = 0;
 
 function todayKey() {
   return toDateKeyInAppTimeZone(new Date());
@@ -808,8 +812,34 @@ function applyCloudState(nextState) {
   }
 }
 
+function canUseCloudSync() {
+  return Boolean(cloudClient && cloudSession?.user?.id);
+}
+
+function stopCloudAutoPull() {
+  if (!cloudAutoPullIntervalId) return;
+  clearInterval(cloudAutoPullIntervalId);
+  cloudAutoPullIntervalId = null;
+}
+
+function startCloudAutoPull() {
+  stopCloudAutoPull();
+  if (!canUseCloudSync()) return;
+  cloudAutoPullIntervalId = setInterval(() => {
+    void syncCloudState({ showStatus: false, suppressNoChangeStatus: true });
+  }, CLOUD_AUTO_PULL_INTERVAL_MS);
+}
+
+function triggerCloudAutoPull() {
+  if (!canUseCloudSync() || cloudSyncInFlight) return;
+  const now = Date.now();
+  if (now - cloudLastAutoPullAt < CLOUD_AUTO_PULL_MIN_GAP_MS) return;
+  cloudLastAutoPullAt = now;
+  void syncCloudState({ showStatus: false, suppressNoChangeStatus: true });
+}
+
 async function syncStateToCloud({ status = "Syncing to cloud..." } = {}) {
-  if (!cloudClient || !cloudSession?.user?.id || cloudSyncInFlight) return false;
+  if (!canUseCloudSync() || cloudSyncInFlight) return false;
   cloudSyncInFlight = true;
   cloudStatusNote = status;
   renderCloudStatus();
@@ -827,16 +857,20 @@ async function syncStateToCloud({ status = "Syncing to cloud..." } = {}) {
   }
 }
 
-async function syncCloudState() {
-  if (!cloudClient || !cloudSession?.user?.id || cloudSyncInFlight) return false;
+async function syncCloudState(options = {}) {
+  const { showStatus = true, suppressNoChangeStatus = false } = options;
+  if (!canUseCloudSync() || cloudSyncInFlight) return false;
   cloudSyncInFlight = true;
-  cloudStatusNote = "Checking cloud state...";
-  renderCloudStatus();
+  cloudLastAutoPullAt = Date.now();
+  if (showStatus) {
+    cloudStatusNote = "Checking cloud state...";
+    renderCloudStatus();
+  }
   try {
     const row = await pullCloudStateRow();
     if (!row?.state) {
       await upsertCloudStateRow();
-      cloudStatusNote = "Cloud initialized from this device.";
+      if (showStatus) cloudStatusNote = "Cloud initialized from this device.";
       return true;
     }
 
@@ -857,11 +891,13 @@ async function syncCloudState() {
 
     if (localUpdatedAt > remoteUpdatedAt) {
       await upsertCloudStateRow();
-      cloudStatusNote = `Uploaded local changes (${cloudTimeLabel()}).`;
+      if (showStatus) cloudStatusNote = `Uploaded local changes (${cloudTimeLabel()}).`;
       return true;
     }
 
-    cloudStatusNote = `Already in sync (${cloudTimeLabel()}).`;
+    if (!suppressNoChangeStatus) {
+      cloudStatusNote = `Already in sync (${cloudTimeLabel()}).`;
+    }
     return true;
   } catch (error) {
     console.error("Cloud sync failed:", error);
@@ -874,7 +910,7 @@ async function syncCloudState() {
 }
 
 function queueCloudSave() {
-  if (!cloudClient || !cloudSession?.user?.id) return;
+  if (!canUseCloudSync()) return;
   if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(() => {
     cloudSyncTimer = null;
@@ -925,6 +961,7 @@ async function signOutCloudSession() {
     const { error } = await cloudClient.auth.signOut();
     if (error) throw error;
     cloudSession = null;
+    stopCloudAutoPull();
     cloudStatusNote = "Signed out. Local-only mode.";
   } catch (error) {
     console.error("Sign-out failed:", error);
@@ -971,10 +1008,12 @@ async function initCloudSync() {
     if (event === "SIGNED_IN") {
       cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
       renderCloudStatus();
+      startCloudAutoPull();
       void syncCloudState();
       return;
     }
     if (event === "SIGNED_OUT") {
+      stopCloudAutoPull();
       cloudStatusNote = "Signed out. Local-only mode.";
       renderCloudStatus();
       return;
@@ -985,9 +1024,11 @@ async function initCloudSync() {
   if (cloudSession?.user?.id) {
     cloudStatusNote = `Signed in as ${cloudSession.user.email || "account"}.`;
     renderCloudStatus();
+    startCloudAutoPull();
     await syncCloudState();
     return;
   }
+  stopCloudAutoPull();
   cloudStatusNote = "Cloud configured. Sign in to sync data across devices.";
   renderCloudStatus();
 }
@@ -2303,7 +2344,7 @@ if (elements.cloudSignOut) {
 }
 if (elements.cloudSyncNow) {
   elements.cloudSyncNow.addEventListener("click", () => {
-    if (!cloudClient || !cloudSession?.user?.id) {
+    if (!canUseCloudSync()) {
       cloudStatusNote = "Sign in first to sync cloud data.";
       renderCloudStatus();
       return;
@@ -2311,6 +2352,16 @@ if (elements.cloudSyncNow) {
     void syncCloudState();
   });
 }
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  triggerCloudAutoPull();
+});
+window.addEventListener("focus", () => {
+  triggerCloudAutoPull();
+});
+window.addEventListener("online", () => {
+  triggerCloudAutoPull();
+});
 
 elements.setupProfileSelect.addEventListener("change", () => setActiveProfile(elements.setupProfileSelect.value));
 elements.setupCreateProfile.addEventListener("click", () => {
