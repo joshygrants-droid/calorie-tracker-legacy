@@ -1050,6 +1050,10 @@ select {
     padding: 32px 18px 60px;
   }
 
+  .grid > .log-food-panel {
+    order: -10;
+  }
+
   .hero-card {
     order: -1;
   }
