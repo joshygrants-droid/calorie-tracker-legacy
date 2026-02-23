@@ -19,6 +19,7 @@ const CLOUD_CONFIG_ENDPOINT = "/api/public-config";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const CLOUD_AUTO_PULL_INTERVAL_MS = 45000;
 const CLOUD_AUTO_PULL_MIN_GAP_MS = 12000;
+const CLOUD_HISTORY_FETCH_LIMIT = 50;
 const MACRO_COLORS = {
   protein: "#00c853",
   carbs: "#2979ff",
@@ -68,6 +69,14 @@ const elements = {
   cloudSignOut: document.getElementById("cloud-sign-out"),
   cloudSyncNow: document.getElementById("cloud-sync-now"),
   cloudLocalOnly: document.getElementById("cloud-local-only"),
+  cloudHistoryRefresh: document.getElementById("cloud-history-refresh"),
+  cloudRestoreLatest: document.getElementById("cloud-restore-latest"),
+  cloudHistorySelect: document.getElementById("cloud-history-select"),
+  cloudRestoreSelected: document.getElementById("cloud-restore-selected"),
+  cloudHistoryStatus: document.getElementById("cloud-history-status"),
+  backupExport: document.getElementById("backup-export"),
+  backupImportTrigger: document.getElementById("backup-import-trigger"),
+  backupImportFile: document.getElementById("backup-import-file"),
   goalValue: document.getElementById("goal-value"),
   todayValue: document.getElementById("today-value"),
   remainingValue: document.getElementById("remaining-value"),
@@ -188,6 +197,10 @@ let cloudLastSyncAt = null;
 let cloudLastSyncKind = "";
 let cloudPanelCollapsed = false;
 let cloudPanelUserSet = false;
+let cloudHistoryInFlight = false;
+let cloudHistoryEntries = [];
+let cloudHistoryLoadedForUserId = null;
+let cloudHistoryStatusNote = "";
 
 function todayKey() {
   return toDateKeyInAppTimeZone(new Date());
@@ -890,6 +903,270 @@ function cloudLastSyncLabel() {
   return cloudLastSyncKind ? `Last sync: ${time} (${cloudLastSyncKind})` : `Last sync: ${time}`;
 }
 
+function cloudDateTimeLabel(input = new Date()) {
+  const date = input instanceof Date ? input : new Date(input);
+  if (!Number.isFinite(date.getTime())) return "Unknown date";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function cloudSnapshotLabel(entry) {
+  const source = String(entry?.source || "sync").toLowerCase();
+  return `${cloudDateTimeLabel(entry?.created_at)} (${source})`;
+}
+
+function resetCloudHistoryRuntime(note = "") {
+  cloudHistoryEntries = [];
+  cloudHistoryLoadedForUserId = null;
+  cloudHistoryStatusNote = note;
+  if (elements.cloudHistorySelect) {
+    elements.cloudHistorySelect.innerHTML = '<option value="">No snapshots loaded</option>';
+    elements.cloudHistorySelect.value = "";
+  }
+}
+
+function renderCloudHistoryOptions() {
+  if (!elements.cloudHistorySelect) return;
+  if (!cloudHistoryEntries.length) {
+    elements.cloudHistorySelect.innerHTML = '<option value="">No snapshots loaded</option>';
+    elements.cloudHistorySelect.value = "";
+    return;
+  }
+  elements.cloudHistorySelect.innerHTML = cloudHistoryEntries
+    .map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(cloudSnapshotLabel(entry))}</option>`)
+    .join("");
+  elements.cloudHistorySelect.value = String(cloudHistoryEntries[0].id);
+}
+
+function cloudHistoryDefaultStatus({ configured, signedIn }) {
+  if (!configured) return "Cloud snapshots need Supabase configuration.";
+  if (!signedIn) return "Sign in to load cloud snapshots.";
+  if (cloudHistoryEntries.length) {
+    return `${cloudHistoryEntries.length} snapshot${cloudHistoryEntries.length === 1 ? "" : "s"} loaded.`;
+  }
+  return "No snapshots loaded. Click Refresh snapshots.";
+}
+
+function isCloudHistorySchemaError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("app_states_history") && (message.includes("does not exist") || message.includes("relation"));
+}
+
+async function loadCloudHistoryEntries(limit = CLOUD_HISTORY_FETCH_LIMIT) {
+  if (!cloudClient || !cloudSession?.user?.id) return [];
+  const { data, error } = await cloudClient
+    .from("app_states_history")
+    .select("id,created_at,schema_version,source")
+    .eq("user_id", cloudSession.user.id)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function refreshCloudHistory(options = {}) {
+  const { showStatus = true } = options;
+  if (!canUseCloudSync()) {
+    resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
+    renderCloudStatus();
+    return false;
+  }
+  if (cloudHistoryInFlight) return false;
+  cloudHistoryInFlight = true;
+  if (showStatus) cloudHistoryStatusNote = "Loading snapshots...";
+  renderCloudStatus();
+  try {
+    const rows = await loadCloudHistoryEntries();
+    cloudHistoryEntries = rows;
+    cloudHistoryLoadedForUserId = cloudSession?.user?.id || null;
+    renderCloudHistoryOptions();
+    cloudHistoryStatusNote = rows.length
+      ? `${rows.length} snapshot${rows.length === 1 ? "" : "s"} loaded.`
+      : "No snapshots yet. Snapshots are created automatically on sync.";
+    return true;
+  } catch (error) {
+    console.error("Cloud snapshot load failed:", error);
+    cloudHistoryStatusNote = isCloudHistorySchemaError(error)
+      ? "Snapshot table missing. Run supabase/schema.sql once."
+      : `Could not load snapshots: ${error.message || "Unknown error"}`;
+    return false;
+  } finally {
+    cloudHistoryInFlight = false;
+    renderCloudStatus();
+  }
+}
+
+async function loadCloudSnapshotById(snapshotId) {
+  if (!cloudClient || !cloudSession?.user?.id) return null;
+  const { data, error } = await cloudClient
+    .from("app_states_history")
+    .select("id,created_at,state,source")
+    .eq("user_id", cloudSession.user.id)
+    .eq("id", snapshotId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function restoreCloudSnapshotById(snapshotId) {
+  if (!canUseCloudSync()) {
+    cloudStatusNote = "Sign in first to restore a snapshot.";
+    renderCloudStatus();
+    return false;
+  }
+  const id = String(snapshotId || "").trim();
+  if (!id) {
+    cloudHistoryStatusNote = "Choose a snapshot to restore.";
+    renderCloudStatus();
+    return false;
+  }
+  if (cloudHistoryInFlight) return false;
+  cloudHistoryInFlight = true;
+  cloudHistoryStatusNote = "Loading snapshot...";
+  renderCloudStatus();
+  try {
+    const row = await loadCloudSnapshotById(id);
+    if (!row?.state) {
+      cloudHistoryStatusNote = "Snapshot not found.";
+      return false;
+    }
+    const label = cloudDateTimeLabel(row.created_at);
+    if (!confirm(`Restore snapshot from ${label}?\n\nThis replaces current data and syncs that snapshot to cloud.`)) {
+      cloudHistoryStatusNote = "Restore canceled.";
+      return false;
+    }
+
+    state = normalizeState(row.state);
+    state.meta = state.meta || {};
+    state.meta.updatedAt = nowIso();
+    persistState(state, { updateTimestamp: false, skipCloud: true });
+    openPreferredView();
+
+    const uploaded = await syncStateToCloud({ status: "Restoring snapshot to cloud..." });
+    if (!uploaded) {
+      cloudHistoryStatusNote = "Snapshot restored locally, but cloud upload failed.";
+      return false;
+    }
+    cloudStatusNote = `Restored snapshot from ${label}.`;
+    cloudHistoryStatusNote = `Restored ${label}.`;
+    await refreshCloudHistory({ showStatus: false });
+    return true;
+  } catch (error) {
+    console.error("Snapshot restore failed:", error);
+    cloudHistoryStatusNote = isCloudHistorySchemaError(error)
+      ? "Snapshot table missing. Run supabase/schema.sql once."
+      : `Restore failed: ${error.message || "Unknown error"}`;
+    return false;
+  } finally {
+    cloudHistoryInFlight = false;
+    renderCloudStatus();
+  }
+}
+
+async function restoreLatestCloudSnapshot() {
+  if (!cloudHistoryEntries.length) {
+    const loaded = await refreshCloudHistory({ showStatus: true });
+    if (!loaded || !cloudHistoryEntries.length) {
+      cloudHistoryStatusNote = "No snapshots available to restore.";
+      renderCloudStatus();
+      return false;
+    }
+  }
+  return restoreCloudSnapshotById(cloudHistoryEntries[0].id);
+}
+
+function backupFileTimestamp() {
+  return nowIso().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+function downloadJsonFile(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(href);
+}
+
+function exportBackup() {
+  const payload = {
+    exportedAt: nowIso(),
+    schemaVersion: SCHEMA_VERSION,
+    state: JSON.parse(JSON.stringify(state)),
+  };
+  downloadJsonFile(`calorie-tracker-backup-${backupFileTimestamp()}.json`, payload);
+  cloudHistoryStatusNote = "Backup file downloaded.";
+  renderCloudStatus();
+}
+
+function coerceImportedState(parsed) {
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Backup file is not valid JSON state.");
+  }
+  const candidate = parsed.state && typeof parsed.state === "object" ? parsed.state : parsed;
+  if (!candidate || typeof candidate !== "object" || !candidate.profiles || typeof candidate.profiles !== "object") {
+    throw new Error("Backup file is missing profile data.");
+  }
+  if (!Object.keys(candidate.profiles).length) {
+    throw new Error("Backup file has no profiles to import.");
+  }
+  return normalizeState(candidate);
+}
+
+async function importBackup(file) {
+  if (!file) return false;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const imported = coerceImportedState(parsed);
+    const profileCount = Object.keys(imported.profiles || {}).length;
+    const confirmText = canUseCloudSync()
+      ? `Import backup with ${profileCount} profile${profileCount === 1 ? "" : "s"}?\n\nThis replaces current data and syncs to cloud.`
+      : `Import backup with ${profileCount} profile${profileCount === 1 ? "" : "s"}?\n\nThis replaces current local data on this device.`;
+    if (!confirm(confirmText)) {
+      cloudHistoryStatusNote = "Import canceled.";
+      renderCloudStatus();
+      return false;
+    }
+
+    state = imported;
+    state.meta = state.meta || {};
+    state.meta.updatedAt = nowIso();
+    persistState(state, { updateTimestamp: false, skipCloud: true });
+    openPreferredView();
+
+    if (canUseCloudSync()) {
+      const uploaded = await syncStateToCloud({ status: "Uploading imported backup..." });
+      if (!uploaded) {
+        cloudStatusNote = "Imported locally, but cloud upload failed.";
+        cloudHistoryStatusNote = "Import finished locally; cloud upload failed.";
+        renderCloudStatus();
+        return false;
+      }
+      await refreshCloudHistory({ showStatus: false });
+      cloudStatusNote = `Imported backup (${profileCount} profile${profileCount === 1 ? "" : "s"}).`;
+    } else {
+      cloudStatusNote = `Imported backup (${profileCount} profile${profileCount === 1 ? "" : "s"}) locally.`;
+    }
+    cloudHistoryStatusNote = `Imported backup file: ${file.name || "backup.json"}`;
+    renderCloudStatus();
+    return true;
+  } catch (error) {
+    console.error("Backup import failed:", error);
+    cloudHistoryStatusNote = `Import failed: ${error.message || "Invalid file"}`;
+    renderCloudStatus();
+    return false;
+  }
+}
+
 function setCloudPanelCollapsed(collapsed, options = {}) {
   const { userInitiated = false } = options;
   cloudPanelCollapsed = Boolean(collapsed);
@@ -916,6 +1193,11 @@ function renderCloudStatus() {
   const configured = Boolean(cloudConfig?.supabaseUrl && cloudConfig?.supabaseAnonKey);
   const ready = configured && Boolean(cloudClient);
   const signedIn = Boolean(cloudSession?.user?.id);
+  const cloudBusy = cloudSyncInFlight || cloudHistoryInFlight;
+  const userId = cloudSession?.user?.id || null;
+  if (cloudHistoryLoadedForUserId && cloudHistoryLoadedForUserId !== userId) {
+    resetCloudHistoryRuntime(signedIn ? "" : "Sign in to load cloud snapshots.");
+  }
 
   const defaultText = !configured
     ? "Local-only mode. Configure Supabase + Vercel to enable account sync."
@@ -926,17 +1208,37 @@ function renderCloudStatus() {
         : "Sign in to load cloud data before profile setup.";
   elements.cloudSyncStatus.textContent = cloudStatusNote || defaultText;
 
-  elements.cloudSignIn.disabled = !ready || signedIn || cloudSyncInFlight;
-  elements.cloudSignOut.disabled = !ready || !signedIn || cloudSyncInFlight;
-  elements.cloudSyncNow.disabled = !ready || !signedIn || cloudSyncInFlight;
+  elements.cloudSignIn.disabled = !ready || signedIn || cloudBusy;
+  elements.cloudSignOut.disabled = !ready || !signedIn || cloudBusy;
+  elements.cloudSyncNow.disabled = !ready || !signedIn || cloudBusy;
   if (elements.cloudEmail) {
-    elements.cloudEmail.disabled = !ready || signedIn || cloudSyncInFlight;
+    elements.cloudEmail.disabled = !ready || signedIn || cloudBusy;
   }
   elements.cloudSignOut.classList.toggle("hidden", !signedIn);
   if (elements.cloudLocalOnly) {
     elements.cloudLocalOnly.classList.toggle("hidden", !configured || signedIn);
-    elements.cloudLocalOnly.disabled = !configured || signedIn || cloudSyncInFlight;
+    elements.cloudLocalOnly.disabled = !configured || signedIn || cloudBusy;
     elements.cloudLocalOnly.textContent = allowLocalWithoutSignIn ? "Local-only active" : "Use local only";
+  }
+  const hasSnapshots = cloudHistoryEntries.length > 0;
+  if (elements.cloudHistoryRefresh) {
+    elements.cloudHistoryRefresh.disabled = !ready || !signedIn || cloudBusy;
+  }
+  if (elements.cloudRestoreLatest) {
+    elements.cloudRestoreLatest.disabled = !ready || !signedIn || !hasSnapshots || cloudBusy;
+  }
+  if (elements.cloudHistorySelect) {
+    elements.cloudHistorySelect.disabled = !ready || !signedIn || !hasSnapshots || cloudBusy;
+  }
+  if (elements.cloudRestoreSelected) {
+    const hasSelectedSnapshot = Boolean(elements.cloudHistorySelect?.value);
+    elements.cloudRestoreSelected.disabled = !ready || !signedIn || !hasSelectedSnapshot || cloudBusy;
+  }
+  if (elements.backupExport) {
+    elements.backupExport.disabled = cloudBusy;
+  }
+  if (elements.backupImportTrigger) {
+    elements.backupImportTrigger.disabled = cloudBusy;
   }
   if (elements.cloudSyncLast) {
     elements.cloudSyncLast.textContent = cloudLastSyncLabel();
@@ -949,6 +1251,10 @@ function renderCloudStatus() {
         ? "Local-only mode active"
         : "Sign in required for cloud-first setup";
     elements.cloudSyncSummary.textContent = summaryText;
+  }
+  if (elements.cloudHistoryStatus) {
+    elements.cloudHistoryStatus.textContent =
+      cloudHistoryStatusNote || cloudHistoryDefaultStatus({ configured, signedIn });
   }
   if (!cloudPanelUserSet) {
     setCloudPanelCollapsed(signedIn);
@@ -1180,6 +1486,7 @@ async function signOutCloudSession() {
     allowLocalWithoutSignIn = true;
     stopCloudAutoPull();
     clearCloudLastSyncRuntime();
+    resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
     cloudPanelUserSet = false;
     setCloudPanelCollapsed(false);
     cloudStatusNote = "Signed out. Local-only mode.";
@@ -1197,6 +1504,7 @@ async function initCloudSync() {
   if (!window.supabase || typeof window.supabase.createClient !== "function") {
     allowLocalWithoutSignIn = true;
     cloudStatusNote = "Supabase SDK failed to load. Cloud sync is disabled.";
+    resetCloudHistoryRuntime("Cloud snapshots are unavailable until Supabase is configured.");
     renderCloudStatus();
     openPreferredView();
     return;
@@ -1205,6 +1513,7 @@ async function initCloudSync() {
   cloudConfig = await loadCloudConfig();
   if (!cloudConfig) {
     allowLocalWithoutSignIn = true;
+    resetCloudHistoryRuntime("Cloud snapshots are unavailable until Supabase is configured.");
     renderCloudStatus();
     openPreferredView();
     return;
@@ -1223,6 +1532,7 @@ async function initCloudSync() {
     console.error("Supabase session init failed:", error);
     allowLocalWithoutSignIn = true;
     cloudStatusNote = `Cloud auth failed: ${error.message || "Unknown error"}`;
+    resetCloudHistoryRuntime("Cloud snapshots are unavailable until sign-in is working.");
     renderCloudStatus();
     openPreferredView();
     return;
@@ -1234,12 +1544,14 @@ async function initCloudSync() {
     if (event === "SIGNED_IN") {
       allowLocalWithoutSignIn = false;
       hydrateCloudLastSyncForUser(session?.user?.id);
+      resetCloudHistoryRuntime("Loading snapshots...");
       cloudPanelUserSet = false;
       setCloudPanelCollapsed(true);
       cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
       renderCloudStatus();
       startCloudAutoPull();
       void syncCloudState({ preferRemoteOnFirstSync: true }).finally(() => {
+        void refreshCloudHistory({ showStatus: false });
         openPreferredView();
       });
       return;
@@ -1248,6 +1560,7 @@ async function initCloudSync() {
       allowLocalWithoutSignIn = true;
       stopCloudAutoPull();
       clearCloudLastSyncRuntime();
+      resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
       cloudPanelUserSet = false;
       setCloudPanelCollapsed(false);
       cloudStatusNote = "Signed out. Local-only mode.";
@@ -1261,18 +1574,21 @@ async function initCloudSync() {
   if (cloudSession?.user?.id) {
     allowLocalWithoutSignIn = false;
     hydrateCloudLastSyncForUser(cloudSession.user.id);
+    resetCloudHistoryRuntime("Loading snapshots...");
     cloudPanelUserSet = false;
     setCloudPanelCollapsed(true);
     cloudStatusNote = `Signed in as ${cloudSession.user.email || "account"}.`;
     renderCloudStatus();
     startCloudAutoPull();
     await syncCloudState({ preferRemoteOnFirstSync: true });
+    await refreshCloudHistory({ showStatus: false });
     openPreferredView();
     return;
   }
   allowLocalWithoutSignIn = false;
   stopCloudAutoPull();
   clearCloudLastSyncRuntime();
+  resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
   cloudPanelUserSet = false;
   setCloudPanelCollapsed(false);
   cloudStatusNote = "Sign in to load cloud data before profile setup.";
@@ -2601,7 +2917,9 @@ if (elements.cloudSyncNow) {
       renderCloudStatus();
       return;
     }
-    void syncCloudState();
+    void syncCloudState().then((ok) => {
+      if (ok) void refreshCloudHistory({ showStatus: false });
+    });
   });
 }
 if (elements.cloudSyncToggle) {
@@ -2616,6 +2934,50 @@ if (elements.cloudLocalOnly) {
     setCloudPanelCollapsed(false);
     cloudStatusNote = "Local-only mode active on this device.";
     renderCloudStatus();
+  });
+}
+if (elements.cloudHistoryRefresh) {
+  elements.cloudHistoryRefresh.addEventListener("click", () => {
+    void refreshCloudHistory();
+  });
+}
+if (elements.cloudRestoreLatest) {
+  elements.cloudRestoreLatest.addEventListener("click", () => {
+    void restoreLatestCloudSnapshot();
+  });
+}
+if (elements.cloudRestoreSelected) {
+  elements.cloudRestoreSelected.addEventListener("click", () => {
+    const snapshotId = elements.cloudHistorySelect?.value;
+    if (!snapshotId) {
+      cloudHistoryStatusNote = "Choose a snapshot to restore.";
+      renderCloudStatus();
+      return;
+    }
+    void restoreCloudSnapshotById(snapshotId);
+  });
+}
+if (elements.cloudHistorySelect) {
+  elements.cloudHistorySelect.addEventListener("change", () => {
+    renderCloudStatus();
+  });
+}
+if (elements.backupExport) {
+  elements.backupExport.addEventListener("click", () => {
+    exportBackup();
+  });
+}
+if (elements.backupImportTrigger) {
+  elements.backupImportTrigger.addEventListener("click", () => {
+    elements.backupImportFile?.click();
+  });
+}
+if (elements.backupImportFile) {
+  elements.backupImportFile.addEventListener("change", () => {
+    const file = elements.backupImportFile.files?.[0];
+    if (!file) return;
+    void importBackup(file);
+    elements.backupImportFile.value = "";
   });
 }
 document.addEventListener("visibilitychange", () => {

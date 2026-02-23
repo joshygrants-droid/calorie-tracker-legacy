@@ -152,6 +152,35 @@ p {
   margin-top: 6px;
 }
 
+.cloud-backup-tools {
+  margin-top: 10px;
+  border: 1px dashed var(--stroke);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.cloud-backup-tools summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.cloud-backup-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.cloud-history-label {
+  font-size: 0.85rem;
+}
+
+.cloud-history-label select {
+  margin-top: 6px;
+}
+
 .setup-flow.setup-locked .panel {
   border: 1px dashed rgba(244, 91, 75, 0.35);
 }
@@ -1067,6 +1096,10 @@ select {
   }
 
   .cloud-sync-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-backup-grid {
     grid-template-columns: 1fr;
   }
 

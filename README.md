@@ -24,6 +24,7 @@ A local-first calorie and weight tracking web app with adaptive calorie targets.
 - Browser `localStorage` persistence (default, no backend required)
 - Optional Supabase Auth + Postgres-backed JSON state sync
 - Optional Vercel serverless config route (`/api/public-config`)
+- In-app backup export/import and cloud snapshot restore tools
 
 ## Run locally (local-only)
 
@@ -45,6 +46,10 @@ You can also open `index.html` directly in a browser, but a local server is reco
 1. Edit `config.local.js` with your Supabase values (or copy values from `config.local.example.js`).
 2. In Supabase SQL Editor, run `supabase/schema.sql`.
 3. Open the app and use the **Cloud sync** panel (email magic link sign-in).
+4. In **Cloud sync -> Backup and restore**:
+   - `Refresh snapshots` to load cloud history.
+   - `Restore latest` or choose one in `Snapshot` then `Restore selected`.
+   - `Export backup` / `Import backup` for manual JSON backups.
 
 If `config.local.js` has empty values, the app stays in local-only mode.
 
@@ -66,6 +71,9 @@ The app will:
 - Keep localStorage as a fallback.
 - Auto-save to cloud after local changes when signed in.
 - Resolve startup conflicts by preferring the newer copy (local vs cloud `updatedAt`).
+- Keep a rolling cloud snapshot history (latest 300 states per user) via DB trigger.
+- Allow restoring snapshots from the app UI.
+- Allow downloading/uploading full JSON backups from the app UI.
 
 ## Data model overview
 

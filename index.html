@@ -44,6 +44,24 @@
             <button class="ghost" id="cloud-sync-now" type="button">Sync now</button>
             <button class="ghost" id="cloud-local-only" type="button">Use local only</button>
           </div>
+          <details class="cloud-backup-tools">
+            <summary>Backup and restore</summary>
+            <div class="cloud-backup-grid">
+              <button class="ghost" id="cloud-history-refresh" type="button">Refresh snapshots</button>
+              <button class="ghost" id="cloud-restore-latest" type="button">Restore latest</button>
+              <label class="cloud-history-label">
+                Snapshot
+                <select id="cloud-history-select">
+                  <option value="">No snapshots loaded</option>
+                </select>
+              </label>
+              <button class="ghost" id="cloud-restore-selected" type="button">Restore selected</button>
+              <button class="ghost" id="backup-export" type="button">Export backup</button>
+              <button class="ghost" id="backup-import-trigger" type="button">Import backup</button>
+              <input id="backup-import-file" type="file" accept="application/json" class="hidden" />
+            </div>
+            <p id="cloud-history-status" class="cloud-sync-last">Sign in to load cloud snapshots.</p>
+          </details>
         </div>
       </section>
 
