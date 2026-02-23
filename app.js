@@ -242,13 +242,51 @@ const RYAN_HOLIDAY_QUOTES = mapQuoteEntries(
   ]
 );
 
-const DAILY_DISCIPLINE_QUOTES = [
-  ...EPICTETUS_QUOTES,
-  ...MARCUS_AURELIUS_QUOTES,
-  ...SENECA_QUOTES,
-  ...JOCKO_WILLINK_QUOTES,
-  ...RYAN_HOLIDAY_QUOTES,
-];
+const BALANCED_QUOTES_PER_AUTHOR = 30;
+
+function takeBalancedQuotes(authorQuotes, authorName, targetCount = BALANCED_QUOTES_PER_AUTHOR) {
+  if (!Array.isArray(authorQuotes) || !authorQuotes.length) return [];
+  if (!Number.isFinite(targetCount) || targetCount <= 0) return [];
+  if (authorQuotes.length >= targetCount) return authorQuotes.slice(0, targetCount);
+
+  const needed = targetCount - authorQuotes.length;
+  console.warn(
+    `Only ${authorQuotes.length} quotes available for ${authorName}. Reusing ${needed} entries to reach ${targetCount}.`
+  );
+
+  const balanced = authorQuotes.slice();
+  for (let index = authorQuotes.length; index < targetCount; index += 1) {
+    const sourceQuote = authorQuotes[index % authorQuotes.length];
+    const repeatRound = Math.floor(index / authorQuotes.length);
+    balanced.push({
+      ...sourceQuote,
+      section: `${sourceQuote.section} (repeat ${repeatRound + 1})`,
+    });
+  }
+  return balanced;
+}
+
+function interleaveQuoteGroups(groups) {
+  if (!Array.isArray(groups) || !groups.length) return [];
+  const maxLength = groups.reduce((max, group) => Math.max(max, Array.isArray(group) ? group.length : 0), 0);
+  const interleaved = [];
+  for (let index = 0; index < maxLength; index += 1) {
+    for (const group of groups) {
+      if (Array.isArray(group) && group[index]) {
+        interleaved.push(group[index]);
+      }
+    }
+  }
+  return interleaved;
+}
+
+const DAILY_DISCIPLINE_QUOTES = interleaveQuoteGroups([
+  takeBalancedQuotes(EPICTETUS_QUOTES, "Epictetus"),
+  takeBalancedQuotes(MARCUS_AURELIUS_QUOTES, "Marcus Aurelius"),
+  takeBalancedQuotes(SENECA_QUOTES, "Seneca"),
+  takeBalancedQuotes(JOCKO_WILLINK_QUOTES, "Jocko Willink"),
+  takeBalancedQuotes(RYAN_HOLIDAY_QUOTES, "Ryan Holiday"),
+]);
 
 if (DAILY_DISCIPLINE_QUOTES.length !== DAILY_QUOTE_ROTATION_DAYS) {
   console.warn(
