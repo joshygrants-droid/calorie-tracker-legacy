@@ -3008,6 +3008,28 @@ function runDiagnostics() {
   if (Math.abs(bmr - 1452) > 4) console.warn("BMR diagnostic drift:", bmr);
 }
 
+function clearZeroOnFocus(input) {
+  if (!input) return;
+  input.addEventListener("focus", () => {
+    const numericValue = safeNumber(input.value, null);
+    if (numericValue === 0) {
+      input.dataset.clearedZeroOnFocus = "1";
+      input.value = "";
+    }
+  });
+  input.addEventListener("blur", () => {
+    if (input.dataset.clearedZeroOnFocus === "1" && String(input.value || "").trim() === "") {
+      input.value = "0";
+    }
+    delete input.dataset.clearedZeroOnFocus;
+  });
+}
+
+clearZeroOnFocus(elements.entryForm?.querySelector("#calories"));
+clearZeroOnFocus(elements.entryForm?.querySelector("#protein-g"));
+clearZeroOnFocus(elements.entryForm?.querySelector("#carbs-g"));
+clearZeroOnFocus(elements.entryForm?.querySelector("#fat-g"));
+
 if (elements.cloudSignIn) {
   elements.cloudSignIn.addEventListener("click", () => {
     void sendCloudSignInLink();
