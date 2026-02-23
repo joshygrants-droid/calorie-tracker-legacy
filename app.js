@@ -807,6 +807,50 @@ function getCloudLastSyncStore() {
   }
 }
 
+function hasStoredCloudSyncForUser(userId) {
+  if (!userId) return false;
+  const store = getCloudLastSyncStore();
+  const entry = store[userId];
+  if (!entry?.at) return false;
+  const ts = Date.parse(String(entry.at));
+  return Number.isFinite(ts);
+}
+
+function stateHasMeaningfulUserData(stateLike) {
+  const profiles = Object.values(stateLike?.profiles || {});
+  if (profiles.length > 1) return true;
+
+  for (const profile of profiles) {
+    const plans = Object.values(profile?.plans || {});
+    if (plans.length > 1) return true;
+    if (String(profile?.name || "").trim().toLowerCase() !== "my profile") return true;
+    if (plans.some((plan) => String(plan?.name || "").trim().toLowerCase() !== "default plan")) return true;
+    if (Array.isArray(profile?.weights) && profile.weights.length > 0) return true;
+    if (Object.keys(profile?.stepsByDay || {}).length > 0) return true;
+    if (Object.keys(profile?.foodCatalog || {}).length > 0) return true;
+    if (Array.isArray(profile?.recentFoodIds) && profile.recentFoodIds.length > 0) return true;
+    if (Array.isArray(profile?.favoriteFoodIds) && profile.favoriteFoodIds.length > 0) return true;
+    if (Object.keys(profile?.mealTemplates || {}).length > 0) return true;
+    if (Object.values(profile?.foodLogs || {}).some((entries) => Array.isArray(entries) && entries.length > 0)) return true;
+  }
+  return false;
+}
+
+function shouldPreferRemoteState(remoteState, options = {}) {
+  const { preferRemoteOnFirstSync = false } = options;
+  const remoteHasData = stateHasMeaningfulUserData(remoteState);
+  const localHasData = stateHasMeaningfulUserData(state);
+
+  if (preferRemoteOnFirstSync) {
+    const userId = cloudSession?.user?.id;
+    const firstSyncForUser = !hasStoredCloudSyncForUser(userId);
+    // Safety net: on first sync for this user, prevent empty local state from clobbering cloud data.
+    if (firstSyncForUser && !localHasData && remoteHasData) return true;
+  }
+
+  return false;
+}
+
 function saveCloudLastSyncStore(store) {
   localStorage.setItem(STORAGE_KEY_CLOUD_LAST_SYNC, JSON.stringify(store));
 }
@@ -1016,7 +1060,7 @@ async function syncStateToCloud({ status = "Syncing to cloud..." } = {}) {
 }
 
 async function syncCloudState(options = {}) {
-  const { showStatus = true, suppressNoChangeStatus = false } = options;
+  const { showStatus = true, suppressNoChangeStatus = false, preferRemoteOnFirstSync = false } = options;
   if (!canUseCloudSync() || cloudSyncInFlight) return false;
   cloudSyncInFlight = true;
   cloudLastAutoPullAt = Date.now();
@@ -1034,6 +1078,16 @@ async function syncCloudState(options = {}) {
     }
 
     const remoteState = normalizeState(row.state);
+    if (shouldPreferRemoteState(remoteState, { preferRemoteOnFirstSync })) {
+      const remoteStateUpdatedAt = stateUpdatedAt(remoteState);
+      const remoteRowUpdatedAt = Date.parse(String(row.updated_at || ""));
+      const remoteReferenceTs = remoteStateUpdatedAt || (Number.isFinite(remoteRowUpdatedAt) ? remoteRowUpdatedAt : Date.now());
+      applyCloudState(remoteState);
+      recordCloudLastSync(new Date(remoteReferenceTs), "Downloaded");
+      cloudStatusNote = `Loaded cloud data (${cloudTimeLabel(remoteReferenceTs)}).`;
+      return true;
+    }
+
     // Compare based on state payload timestamps first, since DB row timestamps can differ from client clocks.
     const remoteStateUpdatedAt = stateUpdatedAt(remoteState);
     const remoteRowUpdatedAt = Date.parse(String(row.updated_at || ""));
@@ -1185,7 +1239,7 @@ async function initCloudSync() {
       cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
       renderCloudStatus();
       startCloudAutoPull();
-      void syncCloudState().finally(() => {
+      void syncCloudState({ preferRemoteOnFirstSync: true }).finally(() => {
         openPreferredView();
       });
       return;
@@ -1212,7 +1266,7 @@ async function initCloudSync() {
     cloudStatusNote = `Signed in as ${cloudSession.user.email || "account"}.`;
     renderCloudStatus();
     startCloudAutoPull();
-    await syncCloudState();
+    await syncCloudState({ preferRemoteOnFirstSync: true });
     openPreferredView();
     return;
   }
