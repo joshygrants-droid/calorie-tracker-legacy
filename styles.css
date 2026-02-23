@@ -89,12 +89,25 @@ p {
   align-content: start;
 }
 
+.daily-quote-block {
+  --quote-nav-offset: 44px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(51, 94, 75, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
 .daily-quote-inline {
   margin: 0;
   font-family: "Fraunces", serif;
-  font-size: 1rem;
-  line-height: 1.5;
-  color: var(--ink);
+  font-size: 1.04rem;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  color: #211c18;
   text-align: left;
 }
 
@@ -102,7 +115,7 @@ p {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: center;
+  align-items: start;
 }
 
 .daily-quote-nav {
@@ -128,8 +141,16 @@ p {
 
 .daily-quote-inline-meta {
   margin: 0;
-  font-size: 0.82rem;
-  color: var(--muted);
+  padding-left: var(--quote-nav-offset);
+  font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6a6158;
+}
+
+.hero-intro .subhead {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .cloud-sync-panel {
@@ -1133,7 +1154,13 @@ select {
   }
 
   .daily-quote-inline {
-    font-size: 0.95rem;
+    font-size: 0.97rem;
+  }
+
+  .daily-quote-block {
+    --quote-nav-offset: 42px;
+    padding: 9px 10px;
+    gap: 3px;
   }
 
   .daily-quote-nav {
