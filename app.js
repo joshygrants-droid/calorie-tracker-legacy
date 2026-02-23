@@ -1981,7 +1981,7 @@ function recalculatePlan() {
   const plan = getActivePlan();
   const bmr = calculateBmr(profile.userProfile);
   const baselineTdee = calculateBaselineTdee(bmr);
-  const stepGoal = safeNumber(profile.userProfile.dailyStepGoal, 0);
+  const stepGoal = safeNumber(plan.goalPlan.dailyStepGoal, 8000);
   const expectedStepCalories = estimateStepCalories(profile.userProfile, stepGoal);
   const expectedTdee = Number.isFinite(baselineTdee) ? baselineTdee + expectedStepCalories : null;
   const floor = getSafetyFloor(profile.userProfile.sex);
@@ -2661,8 +2661,6 @@ function renderSetupFlow() {
   elements.setupProfileForm.querySelector("#setup-profile-height-ft").value = activeProfile.userProfile.heightFt ?? "";
   elements.setupProfileForm.querySelector("#setup-profile-height-in").value = activeProfile.userProfile.heightIn ?? "";
   elements.setupProfileForm.querySelector("#setup-profile-weight").value = activeProfile.userProfile.currentWeightLbs ?? "";
-  elements.setupProfileForm.querySelector("#setup-profile-step-goal").value =
-    activeProfile.userProfile.dailyStepGoal ?? 8000;
 
   const activePlan = getActivePlan();
   elements.setupPlanForm.querySelector("#setup-goal-type").value = activePlan.goalPlan.goalType;
@@ -2693,8 +2691,7 @@ function calculateDayBudget(dateKey) {
   const userProfileForDay = { ...profile.userProfile, currentWeightLbs: weightLbs };
   const bmr = calculateBmr(userProfileForDay);
   const baselineTdee = calculateBaselineTdee(bmr);
-  const stepGoal = safeNumber(profile.userProfile.dailyStepGoal, 0);
-  const planStepGoal = safeNumber(plan.goalPlan.dailyStepGoal, stepGoal);
+  const planStepGoal = safeNumber(plan.goalPlan.dailyStepGoal, 8000);
   const actualSteps = getStepsForDate(dateKey);
   const effectiveActualSteps = actualSteps === null ? planStepGoal : actualSteps;
   const expectedStepCalories = estimateStepCalories(userProfileForDay, planStepGoal);
@@ -3130,7 +3127,6 @@ elements.setupProfileForm.addEventListener("submit", (event) => {
     heightFt: safeNumber(elements.setupProfileForm.querySelector("#setup-profile-height-ft").value, 5),
     heightIn: safeNumber(elements.setupProfileForm.querySelector("#setup-profile-height-in").value, 6),
     currentWeightLbs: safeNumber(elements.setupProfileForm.querySelector("#setup-profile-weight").value),
-    dailyStepGoal: safeNumber(elements.setupProfileForm.querySelector("#setup-profile-step-goal").value, 8000),
   };
   profile.updatedAt = nowIso();
   persistState(state);
