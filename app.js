@@ -130,6 +130,8 @@ const elements = {
   dailyQuoteAuthor: document.getElementById("daily-quote-author"),
   dailyQuoteSource: document.getElementById("daily-quote-source"),
   dailyQuoteRotation: document.getElementById("daily-quote-rotation"),
+  dailyQuotePrev: document.getElementById("daily-quote-prev"),
+  dailyQuoteNext: document.getElementById("daily-quote-next"),
   cloudSyncPanel: document.getElementById("cloud-sync-panel"),
   cloudSyncContent: document.getElementById("cloud-sync-content"),
   cloudSyncSummary: document.getElementById("cloud-sync-summary"),
@@ -276,6 +278,7 @@ let cloudHistoryInFlight = false;
 let cloudHistoryEntries = [];
 let cloudHistoryLoadedForUserId = null;
 let cloudHistoryStatusNote = "";
+let dailyQuoteBrowseIndex = null;
 
 function todayKey() {
   return toDateKeyInAppTimeZone(new Date());
@@ -313,11 +316,31 @@ function dailyQuoteIndex(dateKey = todayKey()) {
   return positiveModulo(dayStamp, quoteCount);
 }
 
+function currentDailyQuoteIndex(dateKey = todayKey()) {
+  const quoteCount = Math.min(DAILY_DISCIPLINE_QUOTES.length, DAILY_QUOTE_ROTATION_DAYS);
+  if (!quoteCount) return 0;
+  if (Number.isFinite(dailyQuoteBrowseIndex)) {
+    return positiveModulo(Math.trunc(dailyQuoteBrowseIndex), quoteCount);
+  }
+  return dailyQuoteIndex(dateKey);
+}
+
+function cycleDailyQuote(direction, dateKey = todayKey()) {
+  const quoteCount = Math.min(DAILY_DISCIPLINE_QUOTES.length, DAILY_QUOTE_ROTATION_DAYS);
+  if (!quoteCount) return;
+  const step = Number(direction) < 0 ? -1 : 1;
+  const baseIndex = currentDailyQuoteIndex(dateKey);
+  dailyQuoteBrowseIndex = positiveModulo(baseIndex + step, quoteCount);
+  renderDailyQuoteCard(dateKey);
+}
+
 function renderDailyQuoteCard(dateKey = todayKey()) {
   if (!elements.dailyQuoteText || !elements.dailyQuoteAuthor || !elements.dailyQuoteSource) return;
   const quoteCount = Math.min(DAILY_DISCIPLINE_QUOTES.length, DAILY_QUOTE_ROTATION_DAYS);
+  if (elements.dailyQuotePrev) elements.dailyQuotePrev.disabled = quoteCount <= 1;
+  if (elements.dailyQuoteNext) elements.dailyQuoteNext.disabled = quoteCount <= 1;
   if (!quoteCount) return;
-  const index = dailyQuoteIndex(dateKey);
+  const index = currentDailyQuoteIndex(dateKey);
   const quote = DAILY_DISCIPLINE_QUOTES[index] || DAILY_DISCIPLINE_QUOTES[0];
   if (!quote) return;
   elements.dailyQuoteText.textContent = `“${quote.text}”`;
@@ -3290,6 +3313,16 @@ elements.setupPlanForm.addEventListener("submit", (event) => {
 });
 
 elements.switchSetup.addEventListener("click", showSetup);
+if (elements.dailyQuotePrev) {
+  elements.dailyQuotePrev.addEventListener("click", () => {
+    cycleDailyQuote(-1, todayKey());
+  });
+}
+if (elements.dailyQuoteNext) {
+  elements.dailyQuoteNext.addEventListener("click", () => {
+    cycleDailyQuote(1, todayKey());
+  });
+}
 
 elements.goalForm.addEventListener("submit", (event) => {
   event.preventDefault();

@@ -95,6 +95,35 @@ p {
   font-size: 1rem;
   line-height: 1.5;
   color: var(--ink);
+  text-align: left;
+}
+
+.daily-quote-inline-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.daily-quote-nav {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: #fff;
+  color: var(--ink);
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.daily-quote-nav:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .daily-quote-inline-meta {
@@ -1105,6 +1134,11 @@ select {
 
   .daily-quote-inline {
     font-size: 0.95rem;
+  }
+
+  .daily-quote-nav {
+    width: 32px;
+    height: 32px;
   }
 
   .grid > .log-food-panel {
