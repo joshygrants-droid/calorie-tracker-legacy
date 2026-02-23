@@ -40,7 +40,7 @@ const WEIGHT_LOSS_MILESTONES = [
   { lbs: 50, object: "about one panda", emoji: "🐼" },
 ];
 
-const DAILY_QUOTE_ROTATION_DAYS = 5;
+const DAILY_QUOTE_ROTATION_DAYS = 150;
 const DAILY_DISCIPLINE_QUOTES = [
   {
     text: "For remember that, if you are persistent, those very persons who at first ridiculed will afterwards admire you.",
@@ -79,10 +79,8 @@ const DAILY_DISCIPLINE_QUOTES = [
   },
 ];
 
-if (DAILY_DISCIPLINE_QUOTES.length !== DAILY_QUOTE_ROTATION_DAYS) {
-  console.warn(
-    `Expected ${DAILY_QUOTE_ROTATION_DAYS} daily quotes, found ${DAILY_DISCIPLINE_QUOTES.length}. Rotation will use available quotes.`
-  );
+if (!DAILY_DISCIPLINE_QUOTES.length) {
+  console.warn("No daily quotes configured. Add at least one quote.");
 }
 
 const elements = {
@@ -284,45 +282,54 @@ function positiveModulo(value, modulus) {
   return ((value % modulus) + modulus) % modulus;
 }
 
+function dailyQuoteSlotCount() {
+  const configuredDays = Number(DAILY_QUOTE_ROTATION_DAYS);
+  if (Number.isFinite(configuredDays) && configuredDays > 0) {
+    return Math.trunc(configuredDays);
+  }
+  return DAILY_DISCIPLINE_QUOTES.length;
+}
+
 function dailyQuoteIndex(dateKey = todayKey()) {
-  const quoteCount = Math.min(DAILY_DISCIPLINE_QUOTES.length, DAILY_QUOTE_ROTATION_DAYS);
-  if (!quoteCount) return 0;
+  const slotCount = dailyQuoteSlotCount();
+  if (!slotCount) return 0;
   const dayStamp = Math.floor(dateKeyToStableDate(dateKey).getTime() / 86400000);
-  return positiveModulo(dayStamp, quoteCount);
+  return positiveModulo(dayStamp, slotCount);
 }
 
 function currentDailyQuoteIndex(dateKey = todayKey()) {
-  const quoteCount = Math.min(DAILY_DISCIPLINE_QUOTES.length, DAILY_QUOTE_ROTATION_DAYS);
-  if (!quoteCount) return 0;
+  const slotCount = dailyQuoteSlotCount();
+  if (!slotCount) return 0;
   if (Number.isFinite(dailyQuoteBrowseIndex)) {
-    return positiveModulo(Math.trunc(dailyQuoteBrowseIndex), quoteCount);
+    return positiveModulo(Math.trunc(dailyQuoteBrowseIndex), slotCount);
   }
   return dailyQuoteIndex(dateKey);
 }
 
 function cycleDailyQuote(direction, dateKey = todayKey()) {
-  const quoteCount = Math.min(DAILY_DISCIPLINE_QUOTES.length, DAILY_QUOTE_ROTATION_DAYS);
-  if (!quoteCount) return;
+  const slotCount = dailyQuoteSlotCount();
+  if (!slotCount) return;
   const step = Number(direction) < 0 ? -1 : 1;
   const baseIndex = currentDailyQuoteIndex(dateKey);
-  dailyQuoteBrowseIndex = positiveModulo(baseIndex + step, quoteCount);
+  dailyQuoteBrowseIndex = positiveModulo(baseIndex + step, slotCount);
   renderDailyQuoteCard(dateKey);
 }
 
 function renderDailyQuoteCard(dateKey = todayKey()) {
   if (!elements.dailyQuoteText || !elements.dailyQuoteAuthor || !elements.dailyQuoteSource) return;
-  const quoteCount = Math.min(DAILY_DISCIPLINE_QUOTES.length, DAILY_QUOTE_ROTATION_DAYS);
-  if (elements.dailyQuotePrev) elements.dailyQuotePrev.disabled = quoteCount <= 1;
-  if (elements.dailyQuoteNext) elements.dailyQuoteNext.disabled = quoteCount <= 1;
-  if (!quoteCount) return;
+  const quoteCount = DAILY_DISCIPLINE_QUOTES.length;
+  const slotCount = dailyQuoteSlotCount();
+  if (elements.dailyQuotePrev) elements.dailyQuotePrev.disabled = slotCount <= 1;
+  if (elements.dailyQuoteNext) elements.dailyQuoteNext.disabled = slotCount <= 1;
+  if (!quoteCount || !slotCount) return;
   const index = currentDailyQuoteIndex(dateKey);
-  const quote = DAILY_DISCIPLINE_QUOTES[index] || DAILY_DISCIPLINE_QUOTES[0];
+  const quote = DAILY_DISCIPLINE_QUOTES[positiveModulo(index, quoteCount)] || DAILY_DISCIPLINE_QUOTES[0];
   if (!quote) return;
   elements.dailyQuoteText.textContent = `“${quote.text}”`;
   elements.dailyQuoteAuthor.textContent = `— ${quote.author}`;
   elements.dailyQuoteSource.textContent = `${quote.work} · ${quote.section}`;
   if (elements.dailyQuoteRotation) {
-    elements.dailyQuoteRotation.textContent = `Quote ${index + 1} of ${quoteCount}`;
+    elements.dailyQuoteRotation.textContent = `Quote ${index + 1} of ${slotCount}`;
   }
 }
 
