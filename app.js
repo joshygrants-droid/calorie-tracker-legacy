@@ -242,8 +242,6 @@ const RYAN_HOLIDAY_QUOTES = mapQuoteEntries(
   ]
 );
 
-const BALANCED_QUOTES_PER_AUTHOR = 30;
-
 const EPICTETUS_THEME_INDICES = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 21, 22, 23, 24, 25, 27, 32, 34, 37, 38, 48, 52, 53, 57,
 ];
@@ -278,28 +276,6 @@ function prioritizeThemeQuotes(authorQuotes, preferredIndices) {
   return ordered;
 }
 
-function takeBalancedQuotes(authorQuotes, authorName, targetCount = BALANCED_QUOTES_PER_AUTHOR) {
-  if (!Array.isArray(authorQuotes) || !authorQuotes.length) return [];
-  if (!Number.isFinite(targetCount) || targetCount <= 0) return [];
-  if (authorQuotes.length >= targetCount) return authorQuotes.slice(0, targetCount);
-
-  const needed = targetCount - authorQuotes.length;
-  console.warn(
-    `Only ${authorQuotes.length} quotes available for ${authorName}. Reusing ${needed} entries to reach ${targetCount}.`
-  );
-
-  const balanced = authorQuotes.slice();
-  for (let index = authorQuotes.length; index < targetCount; index += 1) {
-    const sourceQuote = authorQuotes[index % authorQuotes.length];
-    const repeatRound = Math.floor(index / authorQuotes.length);
-    balanced.push({
-      ...sourceQuote,
-      section: `${sourceQuote.section} (repeat ${repeatRound + 1})`,
-    });
-  }
-  return balanced;
-}
-
 function interleaveQuoteGroups(groups) {
   if (!Array.isArray(groups) || !groups.length) return [];
   const maxLength = groups.reduce((max, group) => Math.max(max, Array.isArray(group) ? group.length : 0), 0);
@@ -315,11 +291,11 @@ function interleaveQuoteGroups(groups) {
 }
 
 const DAILY_DISCIPLINE_QUOTES = interleaveQuoteGroups([
-  takeBalancedQuotes(prioritizeThemeQuotes(EPICTETUS_QUOTES, EPICTETUS_THEME_INDICES), "Epictetus"),
-  takeBalancedQuotes(prioritizeThemeQuotes(MARCUS_AURELIUS_QUOTES, MARCUS_AURELIUS_THEME_INDICES), "Marcus Aurelius"),
-  takeBalancedQuotes(prioritizeThemeQuotes(SENECA_QUOTES, SENECA_THEME_INDICES), "Seneca"),
-  takeBalancedQuotes(JOCKO_WILLINK_QUOTES, "Jocko Willink"),
-  takeBalancedQuotes(RYAN_HOLIDAY_QUOTES, "Ryan Holiday"),
+  prioritizeThemeQuotes(EPICTETUS_QUOTES, EPICTETUS_THEME_INDICES),
+  prioritizeThemeQuotes(MARCUS_AURELIUS_QUOTES, MARCUS_AURELIUS_THEME_INDICES),
+  prioritizeThemeQuotes(SENECA_QUOTES, SENECA_THEME_INDICES),
+  JOCKO_WILLINK_QUOTES,
+  RYAN_HOLIDAY_QUOTES,
 ]);
 
 if (DAILY_DISCIPLINE_QUOTES.length !== DAILY_QUOTE_ROTATION_DAYS) {
