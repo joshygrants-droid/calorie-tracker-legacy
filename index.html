@@ -479,8 +479,15 @@
               <input type="hidden" id="selected-food-id" />
               <label>
                 Selected food
-                <input type="text" id="food-name" placeholder="Choose from search or type new food" required />
+                <input
+                  type="text"
+                  id="food-name"
+                  list="food-name-suggestions"
+                  placeholder="Choose from search or type new food"
+                  required
+                />
               </label>
+              <datalist id="food-name-suggestions"></datalist>
               <label>
                 Meal
                 <select id="meal" required>

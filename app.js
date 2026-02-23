@@ -136,6 +136,7 @@ const elements = {
   mealTemplateSelect: document.getElementById("meal-template-select"),
   foodSearch: document.getElementById("food-search"),
   foodSearchResults: document.getElementById("food-search-results"),
+  foodNameSuggestions: document.getElementById("food-name-suggestions"),
   openCustomFood: document.getElementById("open-custom-food"),
   favoriteSelectedFood: document.getElementById("favorite-selected-food"),
   editSelectedFood: document.getElementById("edit-selected-food"),
@@ -401,6 +402,7 @@ function defaultState() {
       updatedAt: nowIso(),
       migrations: [],
     },
+    sharedFoodCatalog: {},
     activeProfileId: profile.id,
     profiles: { [profile.id]: profile },
   };
@@ -490,6 +492,84 @@ function ensureFoodCatalogFromLogs(profile) {
     .slice(0, 40);
   profile.favoriteFoodIds = Array.isArray(profile.favoriteFoodIds) ? profile.favoriteFoodIds : [];
   profile.mealTemplates = profile.mealTemplates || {};
+}
+
+function foodMacroSum(food) {
+  return (
+    (safeNumber(food?.proteinG, 0) || 0) +
+    (safeNumber(food?.carbsG, 0) || 0) +
+    (safeNumber(food?.fatG, 0) || 0)
+  );
+}
+
+function toTimestamp(value) {
+  const ts = Date.parse(String(value || ""));
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function chooseLaterIso(left, right) {
+  return toTimestamp(left) >= toTimestamp(right) ? left : right;
+}
+
+function chooseEarlierIso(left, right) {
+  if (!left) return right;
+  if (!right) return left;
+  return toTimestamp(left) <= toTimestamp(right) ? left : right;
+}
+
+function normalizeFoodRecord(rawFood) {
+  const now = nowIso();
+  const food = rawFood || {};
+  const id = String(food.id || "").trim() || crypto.randomUUID();
+  return {
+    id,
+    name: String(food.name || "Custom food"),
+    brand: String(food.brand || ""),
+    servingSize: String(food.servingSize || "1 serving"),
+    calories: Math.max(0, safeNumber(food.calories, 0)),
+    proteinG: Math.max(0, safeNumber(food.proteinG, 0)),
+    carbsG: Math.max(0, safeNumber(food.carbsG, 0)),
+    fatG: Math.max(0, safeNumber(food.fatG, 0)),
+    barcode: String(food.barcode || ""),
+    source: String(food.source || "custom"),
+    usageCount: Math.max(0, safeNumber(food.usageCount, 0)),
+    lastUsedAt: String(food.lastUsedAt || food.updatedAt || now),
+    createdAt: String(food.createdAt || now),
+    updatedAt: String(food.updatedAt || now),
+  };
+}
+
+function mergeFoodCatalogs(baseCatalog = {}, incomingCatalog = {}) {
+  const merged = { ...(baseCatalog || {}) };
+  Object.values(incomingCatalog || {}).forEach((rawFood) => {
+    const food = normalizeFoodRecord(rawFood);
+    const existing = merged[food.id] ? normalizeFoodRecord(merged[food.id]) : null;
+    if (!existing) {
+      merged[food.id] = food;
+      return;
+    }
+    const preferIncoming = foodMacroSum(food) > foodMacroSum(existing) || toTimestamp(food.updatedAt) > toTimestamp(existing.updatedAt);
+    const primary = preferIncoming ? food : existing;
+    const secondary = preferIncoming ? existing : food;
+    merged[food.id] = {
+      ...secondary,
+      ...primary,
+      id: food.id,
+      usageCount: Math.max(safeNumber(existing.usageCount, 0) || 0, safeNumber(food.usageCount, 0) || 0),
+      lastUsedAt: chooseLaterIso(existing.lastUsedAt, food.lastUsedAt),
+      createdAt: chooseEarlierIso(existing.createdAt, food.createdAt),
+      updatedAt: chooseLaterIso(existing.updatedAt, food.updatedAt),
+    };
+  });
+  return merged;
+}
+
+function buildSharedFoodCatalog(sharedCatalog = {}, profiles = {}) {
+  let merged = mergeFoodCatalogs({}, sharedCatalog || {});
+  Object.values(profiles || {}).forEach((profile) => {
+    merged = mergeFoodCatalogs(merged, profile?.foodCatalog || {});
+  });
+  return merged;
 }
 
 function rebuildHistoryIndex(profile) {
@@ -673,10 +753,12 @@ function normalizeState(parsed) {
     const fallback = createDefaultProfile();
     profiles[fallback.id] = fallback;
   }
+  const sharedFoodCatalog = buildSharedFoodCatalog(parsed?.sharedFoodCatalog || {}, profiles);
   return {
     ...defaults,
     ...parsed,
     meta: { ...defaults.meta, ...(parsed.meta || {}), schemaVersion: SCHEMA_VERSION },
+    sharedFoodCatalog,
     activeProfileId: profiles[parsed.activeProfileId] ? parsed.activeProfileId : Object.keys(profiles)[0],
     profiles,
   };
@@ -830,6 +912,7 @@ function hasStoredCloudSyncForUser(userId) {
 }
 
 function stateHasMeaningfulUserData(stateLike) {
+  if (Object.keys(stateLike?.sharedFoodCatalog || {}).length > 0) return true;
   const profiles = Object.values(stateLike?.profiles || {});
   if (profiles.length > 1) return true;
 
@@ -1961,7 +2044,10 @@ function setEntriesForDate(dateKey, entries) {
 }
 
 function getFoodCatalog() {
-  return getActiveProfile().foodCatalog || {};
+  if (!state.sharedFoodCatalog || typeof state.sharedFoodCatalog !== "object") {
+    state.sharedFoodCatalog = {};
+  }
+  return state.sharedFoodCatalog;
 }
 
 function upsertFood(foodInput) {
@@ -1969,7 +2055,7 @@ function upsertFood(foodInput) {
   const catalog = getFoodCatalog();
   const id = foodInput.id || crypto.randomUUID();
   const existing = catalog[id] || {};
-  catalog[id] = {
+  const merged = {
     id,
     name: String(foodInput.name || existing.name || "Custom food"),
     brand: String(foodInput.brand || existing.brand || ""),
@@ -1985,7 +2071,8 @@ function upsertFood(foodInput) {
     createdAt: existing.createdAt || nowIso(),
     updatedAt: nowIso(),
   };
-  profile.foodCatalog = catalog;
+  catalog[id] = normalizeFoodRecord(merged);
+  profile.foodCatalog = mergeFoodCatalogs(profile.foodCatalog || {}, { [id]: catalog[id] });
   profile.updatedAt = nowIso();
   persistState(state);
   return catalog[id];
@@ -2108,23 +2195,24 @@ function findFoodByName(name) {
 function bestLoggedNutritionForName(name) {
   const normalized = String(name || "").trim().toLowerCase();
   if (!normalized) return null;
-  const profile = getActiveProfile();
   const candidates = [];
-  Object.values(profile.foodLogs || {}).forEach((entries) => {
-    (entries || []).forEach((entry) => {
-      if (String(entry.food || "").trim().toLowerCase() !== normalized) return;
-      const servings = Math.max(0.1, safeNumber(entry.servings, 1));
-      const calories = Math.max(0, (safeNumber(entry.calories, 0) || 0) / servings);
-      const proteinG = Math.max(0, (safeNumber(entry.proteinG, 0) || 0) / servings);
-      const carbsG = Math.max(0, (safeNumber(entry.carbsG, 0) || 0) / servings);
-      const fatG = Math.max(0, (safeNumber(entry.fatG, 0) || 0) / servings);
-      candidates.push({
-        calories,
-        proteinG,
-        carbsG,
-        fatG,
-        macroSum: proteinG + carbsG + fatG,
-        timestamp: String(entry.updatedAt || entry.createdAt || ""),
+  Object.values(state.profiles || {}).forEach((profile) => {
+    Object.values(profile.foodLogs || {}).forEach((entries) => {
+      (entries || []).forEach((entry) => {
+        if (String(entry.food || "").trim().toLowerCase() !== normalized) return;
+        const servings = Math.max(0.1, safeNumber(entry.servings, 1));
+        const calories = Math.max(0, (safeNumber(entry.calories, 0) || 0) / servings);
+        const proteinG = Math.max(0, (safeNumber(entry.proteinG, 0) || 0) / servings);
+        const carbsG = Math.max(0, (safeNumber(entry.carbsG, 0) || 0) / servings);
+        const fatG = Math.max(0, (safeNumber(entry.fatG, 0) || 0) / servings);
+        candidates.push({
+          calories,
+          proteinG,
+          carbsG,
+          fatG,
+          macroSum: proteinG + carbsG + fatG,
+          timestamp: String(entry.updatedAt || entry.createdAt || ""),
+        });
       });
     });
   });
@@ -2180,25 +2268,29 @@ function refreshSelectedFoodActions() {
 }
 
 function deleteFoodOption(foodId) {
-  const profile = getActiveProfile();
   const food = getFoodCatalog()[foodId];
   if (!food) return;
-  if (!confirm(`Delete saved food "${food.name}"? Existing logged entries will remain.`)) return;
-  delete profile.foodCatalog[foodId];
-  profile.recentFoodIds = (profile.recentFoodIds || []).filter((id) => id !== foodId);
-  profile.favoriteFoodIds = (profile.favoriteFoodIds || []).filter((id) => id !== foodId);
-  Object.values(profile.mealTemplates || {}).forEach((template) => {
-    template.items = (template.items || []).filter((item) => item.foodId !== foodId);
+  if (!confirm(`Delete saved food "${food.name}" for all profiles in this account? Existing logged entries will remain.`)) return;
+  delete state.sharedFoodCatalog[foodId];
+  Object.values(state.profiles || {}).forEach((profile) => {
+    if (profile.foodCatalog && typeof profile.foodCatalog === "object") {
+      delete profile.foodCatalog[foodId];
+    }
+    profile.recentFoodIds = (profile.recentFoodIds || []).filter((id) => id !== foodId);
+    profile.favoriteFoodIds = (profile.favoriteFoodIds || []).filter((id) => id !== foodId);
+    Object.values(profile.mealTemplates || {}).forEach((template) => {
+      template.items = (template.items || []).filter((item) => item.foodId !== foodId);
+    });
+    Object.keys(profile.mealTemplates || {}).forEach((templateId) => {
+      const template = profile.mealTemplates[templateId];
+      if (!template.items || !template.items.length) delete profile.mealTemplates[templateId];
+    });
+    Object.entries(profile.foodLogs || {}).forEach(([dateKey, entries]) => {
+      const patched = entries.map((entry) => (entry.foodId === foodId ? { ...entry, foodId: null } : entry));
+      profile.foodLogs[dateKey] = patched;
+    });
+    profile.updatedAt = nowIso();
   });
-  Object.keys(profile.mealTemplates || {}).forEach((templateId) => {
-    const template = profile.mealTemplates[templateId];
-    if (!template.items || !template.items.length) delete profile.mealTemplates[templateId];
-  });
-  Object.entries(profile.foodLogs || {}).forEach(([dateKey, entries]) => {
-    const patched = entries.map((entry) => (entry.foodId === foodId ? { ...entry, foodId: null } : entry));
-    profile.foodLogs[dateKey] = patched;
-  });
-  profile.updatedAt = nowIso();
   persistState(state);
   setSelectedFood(null);
   renderApp();
@@ -2212,6 +2304,7 @@ function setSelectedFood(food) {
     ? "Unfavorite selected food"
     : "Favorite selected food";
   if (!resolvedFood) {
+    renderFoodNameSuggestions(elements.entryForm.querySelector("#food-name").value);
     refreshSelectedFoodActions();
     return;
   }
@@ -2221,7 +2314,24 @@ function setSelectedFood(food) {
   elements.entryForm.querySelector("#protein-g").value = Number((resolvedFood.proteinG * servings).toFixed(1));
   elements.entryForm.querySelector("#carbs-g").value = Number((resolvedFood.carbsG * servings).toFixed(1));
   elements.entryForm.querySelector("#fat-g").value = Number((resolvedFood.fatG * servings).toFixed(1));
+  renderFoodNameSuggestions(resolvedFood.name);
   refreshSelectedFoodActions();
+}
+
+function renderFoodNameSuggestions(query = "") {
+  if (!elements.foodNameSuggestions) return;
+  const seen = new Set();
+  const rows = searchFoods(query)
+    .filter((food) => {
+      const key = String(food.name || "").trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
+  elements.foodNameSuggestions.innerHTML = rows
+    .map((food) => `<option value="${escapeHtml(food.name)}"></option>`)
+    .join("");
 }
 
 function renderFoodPicker() {
@@ -2260,6 +2370,7 @@ function renderFoodPicker() {
   const selectedFoodId = elements.entryForm.querySelector("#selected-food-id").value;
   elements.favoriteSelectedFood.textContent =
     selectedFoodId && favorites.has(selectedFoodId) ? "Unfavorite selected food" : "Favorite selected food";
+  renderFoodNameSuggestions(elements.entryForm.querySelector("#food-name").value);
   refreshSelectedFoodActions();
 }
 
@@ -3193,12 +3304,15 @@ elements.quickAdds.addEventListener("click", (event) => {
 elements.foodSearch.addEventListener("input", renderFoodPicker);
 elements.entryForm.querySelector("#food-name").addEventListener("input", () => {
   const input = elements.entryForm.querySelector("#food-name").value;
+  renderFoodNameSuggestions(input);
   const food = findFoodByName(input);
   const exactMatch =
     food && String(food.name || "").trim().toLowerCase() === String(input || "").trim().toLowerCase();
   if (exactMatch) {
     setSelectedFood(food);
   } else {
+    elements.entryForm.querySelector("#selected-food-id").value = "";
+    refreshSelectedFoodActions();
     const fallback = bestLoggedNutritionForName(input);
     if (fallback && fallback.macroSum > 0) {
       const servings = Math.max(0.1, safeNumber(elements.entryForm.querySelector("#servings").value, 1));
@@ -3210,11 +3324,14 @@ elements.entryForm.querySelector("#food-name").addEventListener("input", () => {
   }
 });
 elements.entryForm.querySelector("#food-name").addEventListener("change", () => {
-  const food = findFoodByName(elements.entryForm.querySelector("#food-name").value);
+  const currentValue = elements.entryForm.querySelector("#food-name").value;
+  renderFoodNameSuggestions(currentValue);
+  const food = findFoodByName(currentValue);
   if (food) {
     setSelectedFood(food);
   } else {
     elements.entryForm.querySelector("#selected-food-id").value = "";
+    refreshSelectedFoodActions();
     const fallback = bestLoggedNutritionForName(elements.entryForm.querySelector("#food-name").value);
     if (fallback && fallback.macroSum > 0) {
       const servings = Math.max(0.1, safeNumber(elements.entryForm.querySelector("#servings").value, 1));

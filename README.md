@@ -11,6 +11,7 @@ A local-first calorie and weight tracking web app with adaptive calorie targets.
 - Tracks weight check-ins and updates recommendations from latest weight
 - Tracks daily step actuals and compares expected vs actual calorie budget
 - Supports reusable food memory with local food catalog + recent selections
+- Shares saved foods across all profiles in the same signed-in account
 - Supports favorites and meal templates for repeat logging
 - Tracks macros (protein/carbs/fat) in food entries
 - Logs food by date/meal with edit/delete support
@@ -82,6 +83,7 @@ The app will:
 - `plans`: goal + metabolic plans nested under each profile, with active plan selection
 - `stepsByDay`: date-keyed actual step logs for daily budget adjustments
 - `foodCatalog`: reusable foods with macros and usage stats
+- `sharedFoodCatalog`: account-level reusable foods shared by all profiles
 - `recentFoodIds`: ranked recent foods for quick selection
 - `foodLogs`: entries by `YYYY-MM-DD`
 - `weights`: dated weight check-ins
