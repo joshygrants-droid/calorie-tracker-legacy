@@ -83,6 +83,26 @@ p {
   font-size: 1.05rem;
 }
 
+.hero-intro {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.daily-quote-inline {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.daily-quote-inline-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .cloud-sync-panel {
   margin-top: 16px;
   border: 1px dashed var(--stroke);
@@ -1081,6 +1101,10 @@ select {
 
   .hero {
     grid-template-columns: 1fr;
+  }
+
+  .daily-quote-inline {
+    font-size: 0.95rem;
   }
 
   .grid > .log-food-panel {
