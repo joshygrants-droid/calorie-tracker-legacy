@@ -41,43 +41,220 @@ const WEIGHT_LOSS_MILESTONES = [
 ];
 
 const DAILY_QUOTE_ROTATION_DAYS = 150;
+
+function mapQuoteEntries(author, work, sourceUrl, entries) {
+  return entries.map(([section, text]) => ({
+    text,
+    author,
+    work,
+    section,
+    sourceUrl,
+  }));
+}
+
+const EPICTETUS_QUOTES = mapQuoteEntries(
+  "Epictetus",
+  "The Enchiridion",
+  "https://www.gutenberg.org/ebooks/45109",
+  [
+  ["Chapter I", `There are things which are within our power, and there are things which are beyond our power.`],
+  ["Chapter I (passage 2)", `Within our power are opinion, aim, desire, aversion, and, in one word, whatever affairs are our own.`],
+  ["Chapter I (passage 4)", `Now the things within our power are by nature free, unrestricted, unhindered; but those beyond our power are weak, dependent, restricted, alien.`],
+  ["Chapter I (passage 5)", `Remember, then, that if you attribute freedom to things by nature dependent and take what belongs to others for your own, you will be hindered, you will lament, you will be disturbed, you will find fault both with gods and men.`],
+  ["Chapter I (passage 7)", `Aiming, therefore, at such great things, remember that you must not allow yourself any inclination, however slight, toward the attainment of the others; but that you must entirely quit some of them, and for the present postpone the rest.`],
+  ["Chapter I (passage 9)", `Seek at once, therefore, to be able to say to every unpleasing semblance, "You are but a semblance and by no means the real thing."`],
+  ["Chapter I (passage 10)", `And then examine it by those rules which you have; and first and chiefly by this: whether it concerns the things which are within our own power or those which are not; and if it concerns anything beyond our power, be prepared to say that it is nothing to you.`],
+  ["Chapter II", `Remember that desire demands the attainment of that of which you are desirous; and aversion demands the avoidance of that to which you are averse; that he who fails of the object of his desires is disappointed; and he who incurs the object of his aversion is wretched.`],
+  ["Chapter II (passage 2)", `If, then, you shun only those undesirable things which you can control, you will never incur anything which you shun; but if you shun sickness, or death, or poverty, you will run the risk of wretchedness.`],
+  ["Chapter II (passage 3)", `Remove [the habit of] aversion, then, from all things that are not within our power, and apply it to things undesirable which are within our power.`],
+  ["Chapter II (passage 4)", `But for the present, altogether restrain desire; for if you desire any of the things not within our own power, you must necessarily be disappointed; and you are not yet secure of those which are within our power, and so are legitimate objects of desire.`],
+  ["Chapter II (passage 5)", `Where it is practically necessary for you to pursue or avoid anything, do even this with discretion and gentleness and moderation.`],
+  ["Chapter IV", `When you set about any action, remind yourself of what nature the action is.`],
+  ["Chapter IV (passage 3)", `And thus you will more safely go about this action if you say to yourself, "I will now go to bathe and keep my own will in harmony with nature."`],
+  ["Chapter IV (passage 5)", `For thus, if any impediment arises in bathing, you will be able to say, "It was not only to bathe that I desired, but to keep my will in harmony with nature; and I shall not keep it thus if I am out of humor at things that happen."`],
+  ["Chapter V", `Men are disturbed not by things, but by the views which they take of things.`],
+  ["Chapter V (passage 4)", `When, therefore, we are hindered or disturbed, or grieved, let us never impute it to others, but to ourselves—that is, to our own views.`],
+  ["Chapter V (passage 5)", `It is the action of an uninstructed person to reproach others for his own misfortunes; of one entering upon instruction, to reproach himself; and one perfectly instructed, to reproach neither others nor himself.`],
+  ["Chapter VI", `Be not elated at any excellence not your own.`],
+  ["Chapter VI (passage 6)", `So that when you are in harmony with nature in this respect, you will be elated with some reason; for you will be elated at some good of your own.`],
+  ["Chapter VII (passage 2)", `But if you are old, never go far from the ship, lest you should be missing when called for.`],
+  ["Chapter VIII", `Demand not that events should happen as you wish; but wish them to happen as they do happen, and you will go on well.`],
+  ["Chapter IX", `Sickness is an impediment to the body, but not to the will unless itself pleases.`],
+  ["Chapter IX (passage 2)", `Lameness is an impediment to the leg, but not to the will; and say this to yourself with regard to everything that happens.`],
+  ["Chapter IX (passage 3)", `For you will find it to be an impediment to something else, but not truly to yourself.`],
+  ["Chapter X", `Upon every accident, remember to turn toward yourself and inquire what faculty you have for its use.`],
+  ["Chapter X (passage 2)", `If you encounter a handsome person, you will find continence the faculty needed; if pain, then fortitude; if reviling, then patience.`],
+  ["Chapter X (passage 3)", `And when thus habituated, the phenomena of existence will not overwhelm you.`],
+  ["Chapter XI", `Never say of anything, "I have lost it," but, "I have restored it."`],
+  ["Chapter XI (passage 10)", `While he permits you to possess it, hold it as something not your own, as do travelers at an inn.`],
+  ["Chapter XII", `If you would improve, lay aside such reasonings as these: "If I neglect my affairs, I shall not have a maintenance; if I do not punish my servant, he will be good for nothing."`],
+  ["Chapter XII (passage 2)", `For it were better to die of hunger, exempt from grief and fear, than to live in affluence with perturbation; and it is better that your servant should be bad than you unhappy.`],
+  ["Chapter XII (passage 5)", `Say to yourself, "This is the price paid for peace and tranquillity; and nothing is to be had for nothing."`],
+  ["Chapter XII (passage 7)", `But it is not at all desirable for him, and very undesirable for you, that it should be in his power to cause you any disturbance.`],
+  ["Chapter XIII", `If you would improve, be content to be thought foolish and dull with regard to externals.`],
+  ["Chapter XIII (passage 2)", `Do not desire to be thought to know anything; and though you should appear to others to be somebody, distrust yourself.`],
+  ["Chapter XIII (passage 3)", `For be assured, it is not easy at once to keep your will in harmony with nature and to secure externals; but while you are absorbed in the one, you must of necessity neglect the other.`],
+  ["Chapter XIV (passage 3)", `But if you wish not to be disappointed in your desires, that is in your own power.`],
+  ["Chapter XIV (passage 4)", `Exercise, therefore, what is in your power.`],
+  ["Chapter XIV (passage 6)", `Whoever then would be free, let him wish nothing, let him decline nothing, which depends on others; else he must necessarily be a slave.`],
+  ["Chapter XV", `Remember that you must behave as at a banquet.`],
+  ["Chapter XV (passage 3)", `Put out your hand and take a moderate share.`],
+  ["Chapter XV (passage 7)", `Do not yearn in desire toward it, but wait till it reaches you.`],
+  ["Chapter XV (passage 9)", `And if you do not so much as take the things which are set before you, but are able even to forego them, then you will not only be worthy to feast with the gods, but to rule with them also.`],
+  ["Chapter XVI (passage 3)", `Take heed, however, not to groan inwardly, too.`],
+  ["Chapter XVII (passage 2)", `If it be his pleasure that you should enact a poor man, or a cripple, or a ruler, or a private citizen, see that you act it well.`],
+  ["Chapter XVII (passage 3)", `For this is your business—to act well the given part, but to choose it belongs to another.`],
+  ["Chapter XVIII (passage 2)", `But to me all portents are lucky if I will.`],
+  ["Chapter XIX", `You can be unconquerable if you enter into no combat in which it is not in your own power to conquer.`],
+  ["Chapter XIX (passage 3)", `But, for your part, do not desire to be a general, or a senator, or a consul, but to be free; and the only way to this is a disregard of things which lie not within our own power.`],
+  ["Chapter XX", `Remember that it is not he who gives abuse or blows, who affronts, but the view we take of these things as insulting.`],
+  ["Chapter XX (passage 2)", `When, therefore, anyone provokes you, be assured that it is your own opinion which provokes you.`],
+  ["Chapter XX (passage 3)", `Try, therefore, in the first place, not to be bewildered by appearances.`],
+  ["Chapter XX (passage 4)", `For if you once gain time and respite, you will more easily command yourself.`],
+  ["Chapter XXI", `Let death and exile, and all other things which appear terrible, be daily before your eyes, but death chiefly; and you will never entertain an abject thought, nor too eagerly covet anything.`],
+  ["Chapter XXII", `If you have an earnest desire toward philosophy, prepare yourself from the very first to have the multitude laugh and sneer, and say, "He is returned to us a philosopher all at once"; and, "Whence this supercilious look?"`],
+  ["Chapter XXII (passage 2)", `Now, for your part, do not have a supercilious look indeed, but keep steadily to those things which appear best to you, as one appointed by God to this particular station.`],
+  ["Chapter XXII (passage 3)", `For remember that, if you are persistent, those very persons who at first ridiculed will afterwards admire you.`],
+  ["Chapter XXII (passage 4)", `But if you are conquered by them, you will incur a double ridicule.`],
+  ["Chapter XXIII", `If you ever happen to turn your attention to externals, for the pleasure of anyone, be assured that you have ruined your scheme of life.`],
+  ]
+);
+
+const MARCUS_AURELIUS_QUOTES = mapQuoteEntries(
+  "Marcus Aurelius",
+  "Meditations",
+  "https://www.gutenberg.org/files/15877/15877-h/15877-h.htm",
+  [
+  ["Book II, 1", `When you wake up in the morning, tell yourself: The people I deal with today will be meddling, ungrateful, arrogant, dishonest, jealous, and surly.`],
+  ["Book II, 1", `We are made for cooperation, like feet, like hands, like eyelids, like the rows of the upper and lower teeth.`],
+  ["Book II, 5", `Concentrate every minute like a Roman, like a man, on doing what's in front of you with precise and genuine seriousness.`],
+  ["Book II, 5", `You will find rest from vain fancies if you perform every act in life as though it were your last.`],
+  ["Book II, 17", `Very little is needed to make a happy life; it is all within yourself, in your way of thinking.`],
+  ["Book III, 4", `Waste no more time arguing what a good man should be. Be one.`],
+  ["Book III, 5", `A man should be upright, not be kept upright.`],
+  ["Book III, 11", `If you seek tranquility, do less.`],
+  ["Book IV, 2", `Let no act be done at random, nor otherwise than according to the finished rules that govern your art.`],
+  ["Book IV, 3", `People seek retreats for themselves in the country, by the sea, or in the hills. But nowhere can a man find a quieter or less busy retreat than in his own soul.`],
+  ["Book IV, 7", `Choose not to be harmed, and you won't feel harmed.`],
+  ["Book IV, 8", `What does not make a man worse in himself does not make his life worse either.`],
+  ["Book IV, 17", `Do not act as if you had ten thousand years to throw away.`],
+  ["Book IV, 18", `How much time he gains who does not look to see what his neighbor says or does or thinks.`],
+  ["Book IV, 43", `Time is a sort of river of passing events, and strong is its current.`],
+  ["Book IV, 49", `Be like the rocky promontory against which the restless surf continually pounds.`],
+  ["Book V, 16", `The soul becomes dyed with the color of its thoughts.`],
+  ["Book V, 20", `You have power over your mind, not outside events. Realize this, and you will find strength.`],
+  ["Book V, 36", `The art of living is more like wrestling than dancing.`],
+  ["Book VI, 6", `The best revenge is to be unlike him who performed the injury.`],
+  ["Book VI, 30", `Reverence the gods, and help men. Short is life.`],
+  ["Book VI, 39", `Adapt yourself to the life you have been given, and truly love the people with whom destiny has surrounded you.`],
+  ["Book VI, 54", `What is not good for the hive is not good for the bee.`],
+  ["Book VII, 2", `The happiness of your life depends upon the quality of your thoughts.`],
+  ["Book VII, 3", `A man's worth is no greater than the worth of his ambitions.`],
+  ["Book VII, 8", `Never let the future disturb you. You will meet it, if you have to, with the same weapons of reason which today arm you against the present.`],
+  ["Book VII, 38", `It is not right to vex ourselves at things, for they care nothing about it.`],
+  ["Book VII, 54", `Where a man can live, there he can also live well.`],
+  ["Book VII, 61", `If it is not right, do not do it. If it is not true, do not say it.`],
+  ["Book VII, 67", `Nature did not blend things so inextricably that you could not draw your own boundaries.`],
+  ["Book VII, 71", `It is madness to try to escape other people's faults. Start by trying to escape your own.`],
+  ["Book VIII, 2", `On every occasion keep this thought in mind: What is the nature of this thing, and what is my role with regard to it?`],
+  ["Book VIII, 16", `If someone is able to show me that what I think or do is not right, I will happily change, for I seek the truth.`],
+  ["Book VIII, 47", `The impediment to action advances action. What stands in the way becomes the way.`],
+  ["Book VIII, 50", `The cucumber is bitter? Throw it out. There are briars in the path? Turn aside from them.`],
+  ["Book VIII, 51", `No carelessness in your actions, no confusion in your words, no imprecision in your thoughts.`],
+  ["Book IX, 16", `The one who does wrong does wrong against himself.`],
+  ["Book X, 12", `He who follows reason in all things is both tranquil and active at the same time.`],
+  ["Book X, 37", `Learn to ask of all actions, Why are they doing that? Starting with your own.`],
+  ["Book XI, 4", `Have I done something for the common good? Then I share in it and have had my reward.`],
+  ["Book XI, 18", `Everything we hear is an opinion, not a fact. Everything we see is a perspective, not the truth.`],
+  ["Book XII, 29", `Take away your opinion, and then there is taken away the complaint.`],
+  ["Book XII, 36", `All those things you seek by going around in circles, you can have now, if you don't refuse them to yourself.`],
+  ]
+);
+
+const SENECA_QUOTES = mapQuoteEntries(
+  "Seneca",
+  "Moral Letters to Lucilius",
+  "https://en.wikisource.org/wiki/Moral_letters_to_Lucilius",
+  [
+  ["Letter 1", `While we are postponing, life speeds by.`],
+  ["Letter 1", `It is not that we have a short time to live, but that we waste a lot of it.`],
+  ["Letter 1", `Begin at once to live, and count each separate day as a separate life.`],
+  ["Letter 2", `The primary indication of a well-ordered mind is a man's ability to remain in one place and linger in his own company.`],
+  ["Letter 2", `To be everywhere is to be nowhere.`],
+  ["Letter 2", `It is not the man who has too little, but the man who craves more, that is poor.`],
+  ["Letter 3", `For love of bustle is not industry; it is only the restlessness of a hunted mind.`],
+  ["Letter 4", `No man can have a peaceful life who thinks too much about lengthening it.`],
+  ["Letter 4", `Most men ebb and flow in wretchedness between the fear of death and the hardships of life.`],
+  ["Letter 14", `No man is crushed by misfortune unless he has first been deceived by prosperity.`],
+  ["Letter 16", `Virtue alone affords everlasting and peace-giving joy.`],
+  ["Letter 24", `Luck is what happens when preparation meets opportunity.`],
+  ["Letter 28", `You need a change of soul rather than a change of climate.`],
+  ["Letter 28", `You must lay aside the burdens of the mind; until you do this, nowhere will satisfy you.`],
+  ["Letter 28", `If one does not know to which port one is sailing, no wind is favorable.`],
+  ["Letter 28", `If one does not know his mistakes, he won't want to correct them.`],
+  ["Letter 41", `A holy spirit dwells within us.`],
+  ["Letter 52", `The way to improve is to be content with being thought foolish and stupid.`],
+  ["Letter 56", `The evils of idleness are shaken off by hard work.`],
+  ["Letter 63", `Whatever can happen at any time can happen today.`],
+  ["Letter 63", `Not lost, but gone before.`],
+  ["Letter 65", `All art is but imitation of nature.`],
+  ["Letter 66", `Fire tests gold; adversity tests brave men.`],
+  ["Letter 66", `No one can live happily who has regard to himself alone and transforms everything into a question of his own utility.`],
+  ["Letter 77", `No man was ever wise by chance.`],
+  ["Letter 87", `A sword by itself does not slay; it is merely the weapon used by the slayer.`],
+  ["Letter 95", `As our acts and thoughts are, so will our lives be.`],
+  ["Letter 95", `Philosophy calls for simple living, but not for penance.`],
+  ["Letter 96", `And yet life, if well lived, is long enough.`],
+  ["Letter 96", `It is best to endure what you cannot change.`],
+  ["Letter 98", `We suffer more often in imagination than in reality.`],
+  ["Letter 99", `A man who suffers before it is necessary suffers more than is necessary.`],
+  ["Letter 99", `Accept in an unruffled spirit that which is inevitable.`],
+  ["Letter 104", `If you wish to be loved, love.`],
+  ["Letter 104", `If you set a high value on liberty, you must set a low value on everything else.`],
+  ["Letter 105", `He who is feared fears also.`],
+  ["Letter 107", `Fate leads the willing and drags along the reluctant.`],
+  ["On Benefits, Book II", `He who receives a benefit with gratitude repays the first installment on his debt.`],
+  ["On the Shortness of Life", `Life is long, if you know how to use it.`],
+  ["Hercules Furens", `No easy way leads from the earth to the stars.`],
+  ]
+);
+
+const JOCKO_WILLINK_QUOTES = mapQuoteEntries(
+  "Jocko Willink",
+  "Discipline Equals Freedom",
+  "https://www.success.com/10-jocko-willink-quotes-to-keep-you-disciplined/",
+  [
+  ["Discipline Equals Freedom: Field Manual", `Discipline equals freedom.`],
+  ["Discipline Equals Freedom: Field Manual", `Don't count on motivation. Count on discipline.`],
+  ["Discipline Equals Freedom: Field Manual", `You know what you have to do. So make yourself do it.`],
+  ["Discipline Equals Freedom: Field Manual", `There is no hack. There is no shortcut. There is no easy way. There is only one way: so get after it.`],
+  ]
+);
+
+const RYAN_HOLIDAY_QUOTES = mapQuoteEntries(
+  "Ryan Holiday",
+  "Daily Stoic Essays",
+  "https://ryanholiday.net/discipline-is-destiny-25-habits-that-will-guarantee-you-success/",
+  [
+  ["Discipline Is Destiny", `Discipline is the win.`],
+  ["The Most Important Decision of Your Life", `Virtue is something we do.`],
+  ["Daily Discipline Habit", `Make little progress each day.`],
+  ]
+);
+
 const DAILY_DISCIPLINE_QUOTES = [
-  {
-    text: "For remember that, if you are persistent, those very persons who at first ridiculed will afterwards admire you.",
-    author: "Epictetus",
-    work: "The Enchiridion",
-    section: "Chapter XXII (passage 3)",
-    sourceUrl: "https://www.gutenberg.org/ebooks/45109",
-  },
-  {
-    text: "No longer talk at all about the kind of man that a good man ought to be, but be such.",
-    author: "Marcus Aurelius",
-    work: "Meditations",
-    section: "Book X, Section 16 (George Long translation)",
-    sourceUrl: "https://www.gutenberg.org/files/15877/15877-h/15877-h.htm",
-  },
-  {
-    text: "While we are postponing, life speeds by.",
-    author: "Seneca",
-    work: "Moral Letters to Lucilius",
-    section: "Letter 1: On Saving Time",
-    sourceUrl: "https://en.wikisource.org/wiki/Moral_letters_to_Lucilius/Letter_1",
-  },
-  {
-    text: "Discipline equals freedom.",
-    author: "Jocko Willink",
-    work: "Discipline Equals Freedom: Field Manual",
-    section: "Core principle",
-    sourceUrl: "https://www.forbes.com/sites/danschawbel/2017/10/17/jocko-willink-the-relationship-between-discipline-and-freedom/",
-  },
-  {
-    text: "Discipline is destiny.",
-    author: "Ryan Holiday",
-    work: "Discipline Is Destiny: The Power of Self-Control",
-    section: "Core thesis",
-    sourceUrl: "https://ryanholiday.net/discipline-is-destiny-25-habits-that-will-guarantee-you-success/",
-  },
+  ...EPICTETUS_QUOTES,
+  ...MARCUS_AURELIUS_QUOTES,
+  ...SENECA_QUOTES,
+  ...JOCKO_WILLINK_QUOTES,
+  ...RYAN_HOLIDAY_QUOTES,
 ];
+
+if (DAILY_DISCIPLINE_QUOTES.length !== DAILY_QUOTE_ROTATION_DAYS) {
+  console.warn(
+    `Expected ${DAILY_QUOTE_ROTATION_DAYS} daily quotes, found ${DAILY_DISCIPLINE_QUOTES.length}.`
+  );
+}
 
 if (!DAILY_DISCIPLINE_QUOTES.length) {
   console.warn("No daily quotes configured. Add at least one quote.");
