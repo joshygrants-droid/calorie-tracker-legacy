@@ -244,6 +244,40 @@ const RYAN_HOLIDAY_QUOTES = mapQuoteEntries(
 
 const BALANCED_QUOTES_PER_AUTHOR = 30;
 
+const EPICTETUS_THEME_INDICES = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 21, 22, 23, 24, 25, 27, 32, 34, 37, 38, 48, 52, 53, 57,
+];
+
+const MARCUS_AURELIUS_THEME_INDICES = [
+  2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 23, 25, 26, 28, 30, 31, 32, 33, 35, 36, 37, 38, 41, 42,
+];
+
+const SENECA_THEME_INDICES = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 17, 18, 19, 22, 24, 26, 27, 28, 29, 30, 31, 32, 34, 36, 38, 39,
+];
+
+function prioritizeThemeQuotes(authorQuotes, preferredIndices) {
+  if (!Array.isArray(authorQuotes) || !authorQuotes.length) return [];
+  if (!Array.isArray(preferredIndices) || !preferredIndices.length) return authorQuotes.slice();
+
+  const ordered = [];
+  const seen = new Set();
+
+  for (const rawIndex of preferredIndices) {
+    const index = Number(rawIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= authorQuotes.length || seen.has(index)) continue;
+    seen.add(index);
+    ordered.push(authorQuotes[index]);
+  }
+
+  for (let index = 0; index < authorQuotes.length; index += 1) {
+    if (seen.has(index)) continue;
+    ordered.push(authorQuotes[index]);
+  }
+
+  return ordered;
+}
+
 function takeBalancedQuotes(authorQuotes, authorName, targetCount = BALANCED_QUOTES_PER_AUTHOR) {
   if (!Array.isArray(authorQuotes) || !authorQuotes.length) return [];
   if (!Number.isFinite(targetCount) || targetCount <= 0) return [];
@@ -281,9 +315,9 @@ function interleaveQuoteGroups(groups) {
 }
 
 const DAILY_DISCIPLINE_QUOTES = interleaveQuoteGroups([
-  takeBalancedQuotes(EPICTETUS_QUOTES, "Epictetus"),
-  takeBalancedQuotes(MARCUS_AURELIUS_QUOTES, "Marcus Aurelius"),
-  takeBalancedQuotes(SENECA_QUOTES, "Seneca"),
+  takeBalancedQuotes(prioritizeThemeQuotes(EPICTETUS_QUOTES, EPICTETUS_THEME_INDICES), "Epictetus"),
+  takeBalancedQuotes(prioritizeThemeQuotes(MARCUS_AURELIUS_QUOTES, MARCUS_AURELIUS_THEME_INDICES), "Marcus Aurelius"),
+  takeBalancedQuotes(prioritizeThemeQuotes(SENECA_QUOTES, SENECA_THEME_INDICES), "Seneca"),
   takeBalancedQuotes(JOCKO_WILLINK_QUOTES, "Jocko Willink"),
   takeBalancedQuotes(RYAN_HOLIDAY_QUOTES, "Ryan Holiday"),
 ]);
