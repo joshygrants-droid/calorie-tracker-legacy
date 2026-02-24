@@ -340,6 +340,33 @@ function uniqueQuotesByText(quotes) {
   return unique;
 }
 
+function hashStringFNV1a(input) {
+  const value = String(input || "");
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+function stableShuffleQuotes(quotes) {
+  if (!Array.isArray(quotes) || !quotes.length) return [];
+  return quotes
+    .map((quote, index) => ({
+      quote,
+      index,
+      sortKey: hashStringFNV1a(
+        `${quote.author || ""}|${quote.work || ""}|${quote.section || ""}|${quote.text || ""}`
+      ),
+    }))
+    .sort((a, b) => {
+      if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.quote);
+}
+
 function interleaveQuoteGroups(groups) {
   if (!Array.isArray(groups) || !groups.length) return [];
   const maxLength = groups.reduce((max, group) => Math.max(max, Array.isArray(group) ? group.length : 0), 0);
@@ -384,14 +411,16 @@ const STRICT_SENECA_QUOTES = takeFirstNQuotes(
 const STRICT_JOCKO_QUOTES = takeFirstNQuotes(ACTIVE_JOCKO_QUOTES, STRICT_QUOTES_PER_AUTHOR);
 const STRICT_RYAN_QUOTES = takeFirstNQuotes(ACTIVE_RYAN_QUOTES, STRICT_QUOTES_PER_AUTHOR);
 
-const STRICT_30_PER_AUTHOR_QUOTES = uniqueQuotesByText(
-  interleaveQuoteGroups([
-    STRICT_EPICTETUS_QUOTES,
-    STRICT_MARCUS_QUOTES,
-    STRICT_SENECA_QUOTES,
-    STRICT_JOCKO_QUOTES,
-    STRICT_RYAN_QUOTES,
-  ])
+const STRICT_30_PER_AUTHOR_QUOTES = stableShuffleQuotes(
+  uniqueQuotesByText(
+    interleaveQuoteGroups([
+      STRICT_EPICTETUS_QUOTES,
+      STRICT_MARCUS_QUOTES,
+      STRICT_SENECA_QUOTES,
+      STRICT_JOCKO_QUOTES,
+      STRICT_RYAN_QUOTES,
+    ])
+  )
 );
 
 const STRICT_30_READY =
@@ -402,14 +431,16 @@ const STRICT_30_READY =
   STRICT_RYAN_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
   STRICT_30_PER_AUTHOR_QUOTES.length === DAILY_QUOTE_ROTATION_DAYS;
 
-const FALLBACK_UNIQUE_QUOTES = uniqueQuotesByText(
-  interleaveQuoteGroups([
-    prioritizeThemeQuotes(EPICTETUS_QUOTES, EPICTETUS_THEME_INDICES),
-    prioritizeThemeQuotes(MARCUS_AURELIUS_QUOTES, MARCUS_AURELIUS_THEME_INDICES),
-    prioritizeThemeQuotes(SENECA_QUOTES, SENECA_THEME_INDICES),
-    ACTIVE_JOCKO_QUOTES,
-    ACTIVE_RYAN_QUOTES,
-  ])
+const FALLBACK_UNIQUE_QUOTES = stableShuffleQuotes(
+  uniqueQuotesByText(
+    interleaveQuoteGroups([
+      prioritizeThemeQuotes(EPICTETUS_QUOTES, EPICTETUS_THEME_INDICES),
+      prioritizeThemeQuotes(MARCUS_AURELIUS_QUOTES, MARCUS_AURELIUS_THEME_INDICES),
+      prioritizeThemeQuotes(SENECA_QUOTES, SENECA_THEME_INDICES),
+      ACTIVE_JOCKO_QUOTES,
+      ACTIVE_RYAN_QUOTES,
+    ])
+  )
 );
 
 const DAILY_DISCIPLINE_QUOTES = STRICT_30_READY
