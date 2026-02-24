@@ -23,6 +23,7 @@ const CLOUD_AUTO_PULL_MIN_GAP_MS = 12000;
 const CLOUD_AUTO_PUSH_INTERVAL_MS = 10000;
 const CLOUD_HISTORY_FETCH_LIMIT = 50;
 const VALID_MEAL_OPTIONS = new Set(["Breakfast", "Lunch", "Dinner", "Snack"]);
+const ENABLE_LOCAL_ONLY_MODE = false;
 const MACRO_COLORS = {
   protein: "#00c853",
   carbs: "#2979ff",
@@ -2385,8 +2386,9 @@ function renderCloudStatus() {
   }
   elements.cloudSignOut.classList.toggle("hidden", !signedIn);
   if (elements.cloudLocalOnly) {
-    elements.cloudLocalOnly.classList.toggle("hidden", !configured || signedIn);
-    elements.cloudLocalOnly.disabled = !configured || signedIn || cloudBusy;
+    const canShowLocalOnly = ENABLE_LOCAL_ONLY_MODE && configured && !signedIn;
+    elements.cloudLocalOnly.classList.toggle("hidden", !canShowLocalOnly);
+    elements.cloudLocalOnly.disabled = !canShowLocalOnly || cloudBusy;
     elements.cloudLocalOnly.textContent = allowLocalWithoutSignIn ? "Local-only active" : "Use local only";
   }
   const hasSnapshots = cloudHistoryEntries.length > 0;
@@ -2568,6 +2570,17 @@ async function syncCloudState(options = {}) {
   try {
     const row = await pullCloudStateRow();
     if (!row?.state) {
+      const userId = cloudSession?.user?.id;
+      const localHasData = stateHasMeaningfulUserData(state);
+      const hadCloudSyncBefore = hasStoredCloudSyncForUser(userId);
+      // Guardrail: if this user had cloud data before, never initialize cloud from an empty local state.
+      // This usually means wrong environment/project or accidental sign-in mismatch.
+      if (hadCloudSyncBefore && !localHasData) {
+        cloudHasPendingLocalChanges = false;
+        cloudStatusNote = "No cloud record found for this account in this environment. Cloud initialize was blocked.";
+        setCloudPanelCollapsed(false, { userInitiated: true });
+        return false;
+      }
       await upsertCloudStateRow();
       cloudHasPendingLocalChanges = false;
       recordCloudLastSync(new Date(), "Initialized");
@@ -2721,7 +2734,7 @@ async function signOutCloudSession() {
     const { error } = await cloudClient.auth.signOut();
     if (error) throw error;
     cloudSession = null;
-    allowLocalWithoutSignIn = true;
+    allowLocalWithoutSignIn = false;
     stopCloudAutoPull();
     stopCloudAutoPush();
     cloudHasPendingLocalChanges = false;
@@ -2729,7 +2742,7 @@ async function signOutCloudSession() {
     resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
     cloudPanelUserSet = false;
     setCloudPanelCollapsed(false);
-    cloudStatusNote = "Signed out. Local-only mode.";
+    cloudStatusNote = "Signed out. Sign in to access cloud data.";
   } catch (error) {
     console.error("Sign-out failed:", error);
     cloudStatusNote = `Sign-out failed: ${error.message || "Unknown error"}`;
@@ -2810,7 +2823,7 @@ async function initCloudSync() {
       return;
     }
     if (event === "SIGNED_OUT") {
-      allowLocalWithoutSignIn = true;
+      allowLocalWithoutSignIn = false;
       setActiveCloudUser(null);
       stopCloudAutoPull();
       stopCloudAutoPush();
@@ -2819,7 +2832,7 @@ async function initCloudSync() {
       resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
       cloudPanelUserSet = false;
       setCloudPanelCollapsed(false);
-      cloudStatusNote = "Signed out. Local-only mode.";
+      cloudStatusNote = "Signed out. Sign in to access cloud data.";
       renderCloudStatus();
       openPreferredView();
       return;
@@ -4350,6 +4363,7 @@ if (elements.cloudSyncToggle) {
 }
 if (elements.cloudLocalOnly) {
   elements.cloudLocalOnly.addEventListener("click", () => {
+    if (!ENABLE_LOCAL_ONLY_MODE) return;
     allowLocalWithoutSignIn = true;
     cloudPanelUserSet = false;
     setCloudPanelCollapsed(false);
