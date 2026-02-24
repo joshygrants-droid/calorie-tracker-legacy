@@ -22,6 +22,7 @@ const CLOUD_AUTO_PULL_INTERVAL_MS = 30000;
 const CLOUD_AUTO_PULL_MIN_GAP_MS = 12000;
 const CLOUD_AUTO_PUSH_INTERVAL_MS = 10000;
 const CLOUD_HISTORY_FETCH_LIMIT = 50;
+const VALID_MEAL_OPTIONS = new Set(["Breakfast", "Lunch", "Dinner", "Snack"]);
 const MACRO_COLORS = {
   protein: "#00c853",
   carbs: "#2979ff",
@@ -4557,6 +4558,18 @@ elements.planStepsQuickForm.addEventListener("submit", (event) => {
 
 elements.entryForm.addEventListener("submit", (event) => {
   event.preventDefault();
+  const mealSelect = elements.entryForm.querySelector("#meal");
+  const meal = String(mealSelect?.value || "").trim();
+  if (!VALID_MEAL_OPTIONS.has(meal)) {
+    if (mealSelect) {
+      mealSelect.setCustomValidity("Please select a meal.");
+      mealSelect.reportValidity();
+    }
+    return;
+  }
+  if (mealSelect) {
+    mealSelect.setCustomValidity("");
+  }
   const selectedFoodId = elements.entryForm.querySelector("#selected-food-id").value;
   const servings = Math.max(0.1, safeNumber(elements.entryForm.querySelector("#servings").value, 1));
   let food = selectedFoodId ? getFoodCatalog()[selectedFoodId] : null;
@@ -4584,7 +4597,7 @@ elements.entryForm.addEventListener("submit", (event) => {
     food: food.name,
     foodId: food.id,
     servings,
-    meal: elements.entryForm.querySelector("#meal").value,
+    meal,
     calories: Math.max(0, safeNumber(elements.entryForm.querySelector("#calories").value, 0)),
     proteinG: Math.max(0, safeNumber(elements.entryForm.querySelector("#protein-g").value, 0)),
     carbsG: Math.max(0, safeNumber(elements.entryForm.querySelector("#carbs-g").value, 0)),
@@ -4602,6 +4615,9 @@ elements.entryForm.addEventListener("submit", (event) => {
   recordFoodUsage(food.id);
   elements.entryForm.reset();
   elements.entryForm.querySelector("#servings").value = "1";
+  if (mealSelect) {
+    mealSelect.value = "";
+  }
   setSelectedFood(null);
   renderApp();
 });
@@ -4725,9 +4741,26 @@ elements.createMealTemplate.addEventListener("click", () => {
 elements.applyMealTemplate.addEventListener("click", () => {
   const templateId = elements.mealTemplateSelect.value;
   if (!templateId) return;
-  const meal = elements.entryForm.querySelector("#meal").value;
+  const mealSelect = elements.entryForm.querySelector("#meal");
+  const meal = String(mealSelect?.value || "").trim();
+  if (!VALID_MEAL_OPTIONS.has(meal)) {
+    if (mealSelect) {
+      mealSelect.setCustomValidity("Please select a meal.");
+      mealSelect.reportValidity();
+    }
+    return;
+  }
+  if (mealSelect) {
+    mealSelect.setCustomValidity("");
+  }
   applyMealTemplate(templateId, selectedDateKey, meal);
   renderApp();
+});
+elements.entryForm.querySelector("#meal").addEventListener("change", () => {
+  const mealSelect = elements.entryForm.querySelector("#meal");
+  if (mealSelect) {
+    mealSelect.setCustomValidity("");
+  }
 });
 elements.entryForm.querySelector("#servings").addEventListener("input", () => {
   const foodId = elements.entryForm.querySelector("#selected-food-id").value;
