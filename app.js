@@ -1495,6 +1495,467 @@ function stateHasMeaningfulUserData(stateLike) {
   return false;
 }
 
+function stateDataFootprint(stateLike) {
+  const profiles = Object.values(stateLike?.profiles || {});
+  const footprint = {
+    profiles: profiles.length,
+    plans: 0,
+    sharedFoods: Object.keys(stateLike?.sharedFoodCatalog || {}).length,
+    profileFoods: 0,
+    templates: 0,
+    stepDays: 0,
+    weights: 0,
+    logDays: 0,
+    logEntries: 0,
+  };
+
+  for (const profile of profiles) {
+    footprint.plans += Object.keys(profile?.plans || {}).length;
+    footprint.profileFoods += Object.keys(profile?.foodCatalog || {}).length;
+    footprint.templates += Object.keys(profile?.mealTemplates || {}).length;
+    footprint.stepDays += Object.keys(profile?.stepsByDay || {}).length;
+    footprint.weights += Array.isArray(profile?.weights) ? profile.weights.length : 0;
+    const logs = profile?.foodLogs || {};
+    const dayKeys = Object.keys(logs);
+    footprint.logDays += dayKeys.length;
+    for (const dayKey of dayKeys) {
+      const entries = logs[dayKey];
+      if (Array.isArray(entries)) footprint.logEntries += entries.length;
+    }
+  }
+
+  return footprint;
+}
+
+function localStateMayContainExtraData(localStateLike, remoteStateLike) {
+  const local = stateDataFootprint(localStateLike);
+  const remote = stateDataFootprint(remoteStateLike);
+  return (
+    local.profiles > remote.profiles ||
+    local.plans > remote.plans ||
+    local.sharedFoods > remote.sharedFoods ||
+    local.profileFoods > remote.profileFoods ||
+    local.templates > remote.templates ||
+    local.stepDays > remote.stepDays ||
+    local.weights > remote.weights ||
+    local.logDays > remote.logDays ||
+    local.logEntries > remote.logEntries
+  );
+}
+
+function buildFoodEntryIdentitySet(entries = [], dateKey = "") {
+  const set = new Set();
+  if (!Array.isArray(entries)) return set;
+  for (const rawEntry of entries) {
+    const entry = normalizeFoodLogEntryForMerge(rawEntry, dateKey);
+    if (!entry) continue;
+    set.add(String(entry.id || ""));
+  }
+  return set;
+}
+
+function localStateHasDivergentRecords(localStateLike, remoteStateLike) {
+  const localProfiles = localStateLike?.profiles || {};
+  const remoteProfiles = remoteStateLike?.profiles || {};
+
+  for (const [profileId, localProfile] of Object.entries(localProfiles)) {
+    const remoteProfile = remoteProfiles[profileId];
+    if (!remoteProfile) {
+      if (stateHasMeaningfulUserData({ profiles: { [profileId]: localProfile }, sharedFoodCatalog: {} })) return true;
+      continue;
+    }
+
+    const localFoodLogs = localProfile?.foodLogs || {};
+    for (const [dateKey, localEntriesRaw] of Object.entries(localFoodLogs)) {
+      const localEntries = Array.isArray(localEntriesRaw) ? localEntriesRaw : [];
+      if (!localEntries.length) continue;
+      const remoteEntries = Array.isArray(remoteProfile?.foodLogs?.[dateKey]) ? remoteProfile.foodLogs[dateKey] : [];
+      if (!remoteEntries.length) return true;
+      if (localEntries.length !== remoteEntries.length) return true;
+      const localIds = buildFoodEntryIdentitySet(localEntries, dateKey);
+      const remoteIds = buildFoodEntryIdentitySet(remoteEntries, dateKey);
+      if (localIds.size !== remoteIds.size) return true;
+      for (const id of localIds) {
+        if (!remoteIds.has(id)) return true;
+      }
+    }
+
+    const localFoodCatalog = localProfile?.foodCatalog || {};
+    for (const foodId of Object.keys(localFoodCatalog)) {
+      if (!remoteProfile?.foodCatalog?.[foodId]) return true;
+    }
+
+    const localSteps = localProfile?.stepsByDay || {};
+    for (const dateKey of Object.keys(localSteps)) {
+      if (!Object.prototype.hasOwnProperty.call(remoteProfile?.stepsByDay || {}, dateKey)) return true;
+    }
+
+    if ((localProfile?.weights || []).length > (remoteProfile?.weights || []).length) return true;
+  }
+
+  const localSharedCatalog = localStateLike?.sharedFoodCatalog || {};
+  for (const foodId of Object.keys(localSharedCatalog)) {
+    if (!remoteStateLike?.sharedFoodCatalog?.[foodId]) return true;
+  }
+
+  return false;
+}
+
+function mergeStringIdLists(primary = [], secondary = [], maxLength = null) {
+  const merged = [];
+  const seen = new Set();
+  const addValues = (values) => {
+    if (!Array.isArray(values)) return;
+    for (const raw of values) {
+      const value = String(raw || "").trim();
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      merged.push(value);
+      if (Number.isFinite(maxLength) && maxLength > 0 && merged.length >= maxLength) break;
+    }
+  };
+  addValues(primary);
+  if (!Number.isFinite(maxLength) || maxLength <= 0 || merged.length < maxLength) {
+    addValues(secondary);
+  }
+  return merged;
+}
+
+function mergeNumberLists(primary = [], secondary = [], maxLength = null) {
+  const merged = [];
+  const seen = new Set();
+  const addValues = (values) => {
+    if (!Array.isArray(values)) return;
+    for (const raw of values) {
+      const value = Number(raw);
+      if (!Number.isFinite(value) || seen.has(value)) continue;
+      seen.add(value);
+      merged.push(value);
+      if (Number.isFinite(maxLength) && maxLength > 0 && merged.length >= maxLength) break;
+    }
+  };
+  addValues(primary);
+  if (!Number.isFinite(maxLength) || maxLength <= 0 || merged.length < maxLength) {
+    addValues(secondary);
+  }
+  return merged;
+}
+
+function recordUpdatedAt(valueLike) {
+  return toTimestamp(valueLike?.updatedAt || valueLike?.lastCalculatedAt || valueLike?.createdAt || "");
+}
+
+function mergePlanMaps(localPlans = {}, remotePlans = {}, preferLocalForConflict = true) {
+  const merged = {};
+  const planIds = new Set([...Object.keys(remotePlans || {}), ...Object.keys(localPlans || {})]);
+  for (const planId of planIds) {
+    const localPlan = localPlans?.[planId];
+    const remotePlan = remotePlans?.[planId];
+    if (localPlan && remotePlan) {
+      const localTs = recordUpdatedAt(localPlan);
+      const remoteTs = recordUpdatedAt(remotePlan);
+      const keepLocal = localTs > remoteTs || (localTs === remoteTs && preferLocalForConflict);
+      merged[planId] = normalizePlan(keepLocal ? localPlan : remotePlan);
+      continue;
+    }
+    merged[planId] = normalizePlan(localPlan || remotePlan);
+  }
+  return merged;
+}
+
+function mergeMealTemplateMaps(localTemplates = {}, remoteTemplates = {}, preferLocalForConflict = true) {
+  const merged = {};
+  const templateIds = new Set([...Object.keys(remoteTemplates || {}), ...Object.keys(localTemplates || {})]);
+  for (const templateId of templateIds) {
+    const localTemplate = localTemplates?.[templateId];
+    const remoteTemplate = remoteTemplates?.[templateId];
+    if (localTemplate && remoteTemplate) {
+      const localTs = recordUpdatedAt(localTemplate);
+      const remoteTs = recordUpdatedAt(remoteTemplate);
+      const keepLocal = localTs > remoteTs || (localTs === remoteTs && preferLocalForConflict);
+      merged[templateId] = keepLocal ? localTemplate : remoteTemplate;
+      continue;
+    }
+    merged[templateId] = localTemplate || remoteTemplate;
+  }
+  return merged;
+}
+
+function normalizeWeightRecordForMerge(rawWeight) {
+  if (!rawWeight || typeof rawWeight !== "object") return null;
+  const date = String(rawWeight.date || "").trim();
+  if (!date) return null;
+  const weightLbs = safeNumber(rawWeight.weightLbs, null);
+  if (!Number.isFinite(weightLbs) || weightLbs <= 0) return null;
+  const idSource = String(rawWeight.id || "").trim() || `date:${date}`;
+  const createdAt = String(rawWeight.createdAt || rawWeight.updatedAt || `${date}T12:00:00.000Z`);
+  const updatedAt = String(rawWeight.updatedAt || rawWeight.createdAt || createdAt);
+  return {
+    ...rawWeight,
+    id: idSource,
+    date,
+    weightLbs,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function mergeWeights(localWeights = [], remoteWeights = [], preferLocalForConflict = true) {
+  const mergedByKey = new Map();
+  const sourceOrder = preferLocalForConflict ? [remoteWeights, localWeights] : [localWeights, remoteWeights];
+  sourceOrder.forEach((weights, sourceIndex) => {
+    if (!Array.isArray(weights)) return;
+    weights.forEach((rawWeight) => {
+      const weight = normalizeWeightRecordForMerge(rawWeight);
+      if (!weight) return;
+      const key = String(weight.id || "").trim() || `date:${weight.date}`;
+      const existing = mergedByKey.get(key);
+      if (!existing) {
+        mergedByKey.set(key, { ...weight, __sourceIndex: sourceIndex });
+        return;
+      }
+      const incomingTs = toTimestamp(weight.updatedAt || weight.createdAt);
+      const existingTs = toTimestamp(existing.updatedAt || existing.createdAt);
+      if (incomingTs > existingTs || (incomingTs === existingTs && sourceIndex > existing.__sourceIndex)) {
+        mergedByKey.set(key, { ...weight, __sourceIndex: sourceIndex });
+      }
+    });
+  });
+
+  return Array.from(mergedByKey.values())
+    .map(({ __sourceIndex, ...weight }) => weight)
+    .sort((a, b) => {
+      const dateCompare = String(b.date || "").localeCompare(String(a.date || ""));
+      if (dateCompare !== 0) return dateCompare;
+      return toTimestamp(b.createdAt || b.updatedAt) - toTimestamp(a.createdAt || a.updatedAt);
+    });
+}
+
+function profileDayLogUpdatedAt(profile, dateKey) {
+  const historyTs = toTimestamp(profile?.historyIndex?.[dateKey]?.updatedAt);
+  if (historyTs > 0) return historyTs;
+  const entries = Array.isArray(profile?.foodLogs?.[dateKey]) ? profile.foodLogs[dateKey] : [];
+  return entries.reduce((maxTs, entry) => Math.max(maxTs, toTimestamp(entry?.updatedAt || entry?.createdAt)), 0);
+}
+
+function normalizeFoodLogEntryForMerge(rawEntry, dateKey) {
+  if (!rawEntry || typeof rawEntry !== "object") return null;
+  const fallbackTimestamp = `${dateKey}T12:00:00.000Z`;
+  const food = String(rawEntry.food || "").trim();
+  const meal = String(rawEntry.meal || "Snack").trim() || "Snack";
+  const calories = Math.max(0, safeNumber(rawEntry.calories, 0));
+  const proteinG = Math.max(0, safeNumber(rawEntry.proteinG, 0));
+  const carbsG = Math.max(0, safeNumber(rawEntry.carbsG, 0));
+  const fatG = Math.max(0, safeNumber(rawEntry.fatG, 0));
+  const servings = Math.max(0.1, safeNumber(rawEntry.servings, 1));
+  const createdAt = String(rawEntry.createdAt || rawEntry.updatedAt || fallbackTimestamp);
+  const updatedAt = String(rawEntry.updatedAt || rawEntry.createdAt || createdAt);
+  const explicitId = String(rawEntry.id || "").trim();
+  const legacyIdentity = `${dateKey}|${food.toLowerCase()}|${meal.toLowerCase()}|${calories}|${proteinG}|${carbsG}|${fatG}|${String(
+    rawEntry.time || ""
+  ).trim()}|${String(rawEntry.notes || "").trim()}|${createdAt}`;
+  const id = explicitId || `legacy-${hashStringFNV1a(legacyIdentity).toString(16)}`;
+  return {
+    ...rawEntry,
+    id,
+    dateKey,
+    food: food || "Entry",
+    meal,
+    calories,
+    proteinG,
+    carbsG,
+    fatG,
+    servings,
+    time: String(rawEntry.time || ""),
+    notes: String(rawEntry.notes || ""),
+    foodId: rawEntry.foodId || null,
+    foodSnapshot: rawEntry.foodSnapshot || null,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function mergeFoodLogEntryArrays(localEntries = [], remoteEntries = [], dateKey, preferLocalForConflict = true) {
+  const mergedByKey = new Map();
+  const sourceOrder = preferLocalForConflict ? [remoteEntries, localEntries] : [localEntries, remoteEntries];
+  sourceOrder.forEach((entries, sourceIndex) => {
+    if (!Array.isArray(entries)) return;
+    entries.forEach((rawEntry) => {
+      const entry = normalizeFoodLogEntryForMerge(rawEntry, dateKey);
+      if (!entry) return;
+      const key = String(entry.id || "").trim();
+      const existing = mergedByKey.get(key);
+      if (!existing) {
+        mergedByKey.set(key, { ...entry, __sourceIndex: sourceIndex });
+        return;
+      }
+      const incomingTs = toTimestamp(entry.updatedAt || entry.createdAt);
+      const existingTs = toTimestamp(existing.updatedAt || existing.createdAt);
+      if (incomingTs > existingTs || (incomingTs === existingTs && sourceIndex > existing.__sourceIndex)) {
+        mergedByKey.set(key, { ...entry, __sourceIndex: sourceIndex });
+      }
+    });
+  });
+
+  return Array.from(mergedByKey.values())
+    .map(({ __sourceIndex, ...entry }) => entry)
+    .sort((a, b) => toTimestamp(b.createdAt || b.updatedAt) - toTimestamp(a.createdAt || a.updatedAt));
+}
+
+function mergeFoodLogs(localProfile, remoteProfile, preferLocalForConflict = true) {
+  const merged = {};
+  const dateKeys = new Set([
+    ...Object.keys(localProfile?.foodLogs || {}),
+    ...Object.keys(remoteProfile?.foodLogs || {}),
+  ]);
+
+  for (const dateKey of dateKeys) {
+    const localEntries = Array.isArray(localProfile?.foodLogs?.[dateKey]) ? localProfile.foodLogs[dateKey] : [];
+    const remoteEntries = Array.isArray(remoteProfile?.foodLogs?.[dateKey]) ? remoteProfile.foodLogs[dateKey] : [];
+    const localDayTs = profileDayLogUpdatedAt(localProfile, dateKey);
+    const remoteDayTs = profileDayLogUpdatedAt(remoteProfile, dateKey);
+
+    // Preserve intentional whole-day clears: if newer side has an empty day array, keep that newer empty snapshot.
+    if (localDayTs > remoteDayTs && localEntries.length === 0) {
+      merged[dateKey] = [];
+      continue;
+    }
+    if (remoteDayTs > localDayTs && remoteEntries.length === 0) {
+      merged[dateKey] = [];
+      continue;
+    }
+
+    // Default to non-destructive union by stable entry id so entries logged on either device are retained.
+    merged[dateKey] = mergeFoodLogEntryArrays(localEntries, remoteEntries, dateKey, preferLocalForConflict);
+  }
+
+  return merged;
+}
+
+function mergeStepsByDay(localProfile, remoteProfile, preferLocalForConflict = true) {
+  const merged = {};
+  const dateKeys = new Set([
+    ...Object.keys(localProfile?.stepsByDay || {}),
+    ...Object.keys(remoteProfile?.stepsByDay || {}),
+  ]);
+  const localProfileTs = toTimestamp(localProfile?.updatedAt);
+  const remoteProfileTs = toTimestamp(remoteProfile?.updatedAt);
+  const keepLocalOnTie = localProfileTs > remoteProfileTs || (localProfileTs === remoteProfileTs && preferLocalForConflict);
+
+  for (const dateKey of dateKeys) {
+    const localValue = safeNumber(localProfile?.stepsByDay?.[dateKey], null);
+    const remoteValue = safeNumber(remoteProfile?.stepsByDay?.[dateKey], null);
+    if (!Number.isFinite(localValue) && Number.isFinite(remoteValue)) {
+      merged[dateKey] = Math.max(0, Math.round(remoteValue));
+      continue;
+    }
+    if (!Number.isFinite(remoteValue) && Number.isFinite(localValue)) {
+      merged[dateKey] = Math.max(0, Math.round(localValue));
+      continue;
+    }
+    if (!Number.isFinite(localValue) && !Number.isFinite(remoteValue)) continue;
+    if (localValue === remoteValue) {
+      merged[dateKey] = Math.max(0, Math.round(localValue));
+      continue;
+    }
+    merged[dateKey] = keepLocalOnTie ? Math.max(0, Math.round(localValue)) : Math.max(0, Math.round(remoteValue));
+  }
+  return merged;
+}
+
+function mergeProfilesForSync(localProfileRaw, remoteProfileRaw) {
+  const localProfile = normalizeProfile(localProfileRaw);
+  const remoteProfile = normalizeProfile(remoteProfileRaw);
+  const localTs = toTimestamp(localProfile.updatedAt);
+  const remoteTs = toTimestamp(remoteProfile.updatedAt);
+  const preferLocalForConflict = localTs > remoteTs || (localTs === remoteTs);
+  const primary = preferLocalForConflict ? localProfile : remoteProfile;
+  const secondary = preferLocalForConflict ? remoteProfile : localProfile;
+  const plans = mergePlanMaps(localProfile.plans, remoteProfile.plans, preferLocalForConflict);
+
+  const merged = {
+    ...secondary,
+    ...primary,
+    id: primary.id || secondary.id || crypto.randomUUID(),
+    createdAt: chooseEarlierIso(primary.createdAt, secondary.createdAt) || primary.createdAt || secondary.createdAt || nowIso(),
+    updatedAt: chooseLaterIso(primary.updatedAt, secondary.updatedAt) || nowIso(),
+    userProfile: { ...(secondary.userProfile || {}), ...(primary.userProfile || {}) },
+    plans,
+    activePlanId: plans[primary.activePlanId]
+      ? primary.activePlanId
+      : plans[secondary.activePlanId]
+        ? secondary.activePlanId
+        : Object.keys(plans)[0],
+    foodLogs: mergeFoodLogs(localProfile, remoteProfile, preferLocalForConflict),
+    stepsByDay: mergeStepsByDay(localProfile, remoteProfile, preferLocalForConflict),
+    foodCatalog: mergeFoodCatalogs(remoteProfile.foodCatalog || {}, localProfile.foodCatalog || {}),
+    recentFoodIds: preferLocalForConflict
+      ? mergeStringIdLists(localProfile.recentFoodIds || [], remoteProfile.recentFoodIds || [], 40)
+      : mergeStringIdLists(remoteProfile.recentFoodIds || [], localProfile.recentFoodIds || [], 40),
+    favoriteFoodIds: mergeStringIdLists(localProfile.favoriteFoodIds || [], remoteProfile.favoriteFoodIds || []),
+    mealTemplates: mergeMealTemplateMaps(localProfile.mealTemplates || {}, remoteProfile.mealTemplates || {}, preferLocalForConflict),
+    weights: mergeWeights(localProfile.weights || [], remoteProfile.weights || [], preferLocalForConflict),
+    calorieHistory: Array.isArray(primary.calorieHistory) ? primary.calorieHistory : [],
+    weightLossMilestonesSeen: mergeNumberLists(
+      localProfile.weightLossMilestonesSeen || [],
+      remoteProfile.weightLossMilestonesSeen || []
+    ),
+  };
+
+  const normalized = normalizeProfile(merged);
+  normalized.updatedAt = chooseLaterIso(localProfile.updatedAt, remoteProfile.updatedAt) || normalized.updatedAt;
+  return normalized;
+}
+
+function mergeStatesForSync(localStateRaw, remoteStateRaw) {
+  const localState = normalizeState(localStateRaw || {});
+  const remoteState = normalizeState(remoteStateRaw || {});
+  const localTs = stateUpdatedAt(localState);
+  const remoteTs = stateUpdatedAt(remoteState);
+  const preferLocalState = localTs > remoteTs || localTs === remoteTs;
+  const primaryState = preferLocalState ? localState : remoteState;
+  const secondaryState = preferLocalState ? remoteState : localState;
+
+  const mergedProfiles = {};
+  const profileIds = new Set([...Object.keys(localState.profiles || {}), ...Object.keys(remoteState.profiles || {})]);
+  for (const profileId of profileIds) {
+    const localProfile = localState.profiles?.[profileId];
+    const remoteProfile = remoteState.profiles?.[profileId];
+    if (localProfile && remoteProfile) {
+      const mergedProfile = mergeProfilesForSync(localProfile, remoteProfile);
+      mergedProfiles[mergedProfile.id] = mergedProfile;
+      continue;
+    }
+    const onlyProfile = localProfile || remoteProfile;
+    const normalizedProfile = normalizeProfile(onlyProfile);
+    mergedProfiles[normalizedProfile.id] = normalizedProfile;
+  }
+
+  const mergedSharedFoodCatalog = mergeFoodCatalogs(remoteState.sharedFoodCatalog || {}, localState.sharedFoodCatalog || {});
+  const fallbackProfileId = Object.keys(mergedProfiles)[0];
+  const mergedActiveProfileId = mergedProfiles[primaryState.activeProfileId]
+    ? primaryState.activeProfileId
+    : mergedProfiles[secondaryState.activeProfileId]
+      ? secondaryState.activeProfileId
+      : fallbackProfileId;
+
+  const mergedState = {
+    ...secondaryState,
+    ...primaryState,
+    profiles: mergedProfiles,
+    activeProfileId: mergedActiveProfileId,
+    sharedFoodCatalog: mergedSharedFoodCatalog,
+    meta: {
+      ...(secondaryState.meta || {}),
+      ...(primaryState.meta || {}),
+      schemaVersion: SCHEMA_VERSION,
+      updatedAt: nowIso(),
+    },
+  };
+
+  return normalizeState(mergedState);
+}
+
 function shouldPreferRemoteState(remoteState, options = {}) {
   const { preferRemoteOnFirstSync = false } = options;
   const remoteHasData = stateHasMeaningfulUserData(remoteState);
@@ -2047,11 +2508,35 @@ async function syncCloudState(options = {}) {
       remoteStateUpdatedAt ||
       (Number.isFinite(remoteRowUpdatedAt) ? remoteRowUpdatedAt : 0);
     const localUpdatedAt = stateUpdatedAt(state);
+    const localHasData = stateHasMeaningfulUserData(state);
+    const remoteHasData = stateHasMeaningfulUserData(remoteState);
+    const preserveLocalBeforeDownload =
+      localHasData &&
+      (!remoteHasData ||
+        localStateMayContainExtraData(state, remoteState) ||
+        localStateHasDivergentRecords(state, remoteState));
 
     if (remoteUpdatedAt > localUpdatedAt) {
+      if (preserveLocalBeforeDownload) {
+        const mergedState = mergeStatesForSync(state, remoteState);
+        applyCloudState(mergedState);
+        await upsertCloudStateRow();
+        recordCloudLastSync(new Date(), "Merged");
+        cloudStatusNote = `Merged local + cloud data (${cloudTimeLabel()}).`;
+        return true;
+      }
       applyCloudState(remoteState);
       recordCloudLastSync(new Date(remoteUpdatedAt), "Downloaded");
       cloudStatusNote = `Loaded cloud data (${cloudTimeLabel(remoteUpdatedAt)}).`;
+      return true;
+    }
+
+    if (preserveLocalBeforeDownload && localUpdatedAt <= remoteUpdatedAt) {
+      const mergedState = mergeStatesForSync(state, remoteState);
+      applyCloudState(mergedState);
+      await upsertCloudStateRow();
+      recordCloudLastSync(new Date(), "Merged");
+      if (showStatus) cloudStatusNote = `Merged local + cloud data (${cloudTimeLabel()}).`;
       return true;
     }
 
