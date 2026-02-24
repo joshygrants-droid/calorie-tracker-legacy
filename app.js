@@ -1,4 +1,5 @@
 const STORAGE_KEY_V5 = "calorie-tracker-v5";
+const STORAGE_KEY_V5_USER_PREFIX = "calorie-tracker-v5-user";
 const STORAGE_KEY_V4 = "calorie-tracker-v4";
 const STORAGE_KEY_V3 = "calorie-tracker-v3";
 const STORAGE_KEY_V2 = "calorie-tracker-v2";
@@ -707,6 +708,7 @@ let cloudHistoryEntries = [];
 let cloudHistoryLoadedForUserId = null;
 let cloudHistoryStatusNote = "";
 let dailyQuoteBrowseIndex = null;
+let activeCloudUserId = null;
 
 function todayKey() {
   return toDateKeyInAppTimeZone(new Date());
@@ -1335,12 +1337,60 @@ function stateUpdatedAt(stateLike) {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+function storageKeyForUserState(userId) {
+  const normalized = String(userId || "").trim();
+  if (!normalized) return null;
+  return `${STORAGE_KEY_V5_USER_PREFIX}:${normalized}`;
+}
+
+function loadStateFromStorageKey(storageKey) {
+  if (!storageKey) return null;
+  const raw = localStorage.getItem(storageKey);
+  if (!raw) return null;
+  try {
+    return normalizeState(JSON.parse(raw));
+  } catch (error) {
+    return null;
+  }
+}
+
+function loadStateForUser(userId) {
+  return loadStateFromStorageKey(storageKeyForUserState(userId));
+}
+
+function setActiveCloudUser(userId) {
+  const normalized = String(userId || "").trim();
+  activeCloudUserId = normalized || null;
+}
+
+function hydrateStateForSignedInUser(userId) {
+  const cachedUserState = loadStateForUser(userId);
+  if (cachedUserState) {
+    state = cachedUserState;
+    return "user-cache";
+  }
+
+  // If this account has synced before but no user-local cache exists, avoid carrying global local data
+  // from another account. Start clean and let cloud pull fill state.
+  if (hasStoredCloudSyncForUser(userId)) {
+    state = defaultState();
+    return "clean-start";
+  }
+
+  // First sync for this account: keep current local state so it can be promoted to cloud.
+  return "kept-global-local";
+}
+
 function persistLocalState(nextState, { updateTimestamp = true } = {}) {
   if (updateTimestamp) {
     nextState.meta = nextState.meta || {};
     nextState.meta.updatedAt = nowIso();
   }
   localStorage.setItem(STORAGE_KEY_V5, JSON.stringify(nextState));
+  const userStorageKey = storageKeyForUserState(activeCloudUserId);
+  if (userStorageKey) {
+    localStorage.setItem(userStorageKey, JSON.stringify(nextState));
+  }
 }
 
 function loadState() {
@@ -2674,6 +2724,8 @@ async function initCloudSync() {
     cloudSession = session;
     if (event === "SIGNED_IN") {
       allowLocalWithoutSignIn = false;
+      setActiveCloudUser(session?.user?.id);
+      hydrateStateForSignedInUser(session?.user?.id);
       hydrateCloudLastSyncForUser(session?.user?.id);
       resetCloudHistoryRuntime("Loading snapshots...");
       cloudPanelUserSet = false;
@@ -2689,6 +2741,7 @@ async function initCloudSync() {
     }
     if (event === "SIGNED_OUT") {
       allowLocalWithoutSignIn = true;
+      setActiveCloudUser(null);
       stopCloudAutoPull();
       clearCloudLastSyncRuntime();
       resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
@@ -2704,6 +2757,8 @@ async function initCloudSync() {
 
   if (cloudSession?.user?.id) {
     allowLocalWithoutSignIn = false;
+    setActiveCloudUser(cloudSession.user.id);
+    hydrateStateForSignedInUser(cloudSession.user.id);
     hydrateCloudLastSyncForUser(cloudSession.user.id);
     resetCloudHistoryRuntime("Loading snapshots...");
     cloudPanelUserSet = false;
@@ -2717,6 +2772,7 @@ async function initCloudSync() {
     return;
   }
   allowLocalWithoutSignIn = false;
+  setActiveCloudUser(null);
   stopCloudAutoPull();
   clearCloudLastSyncRuntime();
   resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
