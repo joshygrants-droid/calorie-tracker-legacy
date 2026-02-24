@@ -2560,14 +2560,20 @@ async function syncCloudState(options = {}) {
     const localUpdatedAt = stateUpdatedAt(state);
     const localHasData = stateHasMeaningfulUserData(state);
     const remoteHasData = stateHasMeaningfulUserData(remoteState);
-    const preserveLocalBeforeDownload =
+    const localStateContainsExtraData =
       localHasData &&
       (!remoteHasData ||
         localStateMayContainExtraData(state, remoteState) ||
         localStateHasDivergentRecords(state, remoteState));
+    const remoteStateContainsExtraData =
+      localHasData &&
+      remoteHasData &&
+      (localStateMayContainExtraData(remoteState, state) ||
+        localStateHasDivergentRecords(remoteState, state));
+    const statesNeedMerge = localStateContainsExtraData || remoteStateContainsExtraData;
 
     if (remoteUpdatedAt > localUpdatedAt) {
-      if (preserveLocalBeforeDownload) {
+      if (localStateContainsExtraData) {
         const mergedState = mergeStatesForSync(state, remoteState);
         applyCloudState(mergedState);
         await upsertCloudStateRow();
@@ -2581,19 +2587,27 @@ async function syncCloudState(options = {}) {
       return true;
     }
 
-    if (preserveLocalBeforeDownload && localUpdatedAt <= remoteUpdatedAt) {
+    if (localUpdatedAt > remoteUpdatedAt) {
+      if (remoteStateContainsExtraData) {
+        const mergedState = mergeStatesForSync(state, remoteState);
+        applyCloudState(mergedState);
+        await upsertCloudStateRow();
+        recordCloudLastSync(new Date(), "Merged");
+        if (showStatus) cloudStatusNote = `Merged local + cloud data (${cloudTimeLabel()}).`;
+        return true;
+      }
+      await upsertCloudStateRow();
+      recordCloudLastSync(new Date(), "Uploaded");
+      if (showStatus) cloudStatusNote = `Uploaded local changes (${cloudTimeLabel()}).`;
+      return true;
+    }
+
+    if (statesNeedMerge) {
       const mergedState = mergeStatesForSync(state, remoteState);
       applyCloudState(mergedState);
       await upsertCloudStateRow();
       recordCloudLastSync(new Date(), "Merged");
       if (showStatus) cloudStatusNote = `Merged local + cloud data (${cloudTimeLabel()}).`;
-      return true;
-    }
-
-    if (localUpdatedAt > remoteUpdatedAt) {
-      await upsertCloudStateRow();
-      recordCloudLastSync(new Date(), "Uploaded");
-      if (showStatus) cloudStatusNote = `Uploaded local changes (${cloudTimeLabel()}).`;
       return true;
     }
 
@@ -2622,7 +2636,7 @@ function queueCloudSave() {
       queueCloudSave();
       return;
     }
-    void syncStateToCloud({ status: "Syncing recent changes..." });
+    void syncCloudState({ showStatus: false, suppressNoChangeStatus: true });
   }, CLOUD_SYNC_DEBOUNCE_MS);
 }
 
