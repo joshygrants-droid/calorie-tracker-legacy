@@ -301,6 +301,21 @@ p {
   transition: stroke-dashoffset 0.6s ease;
 }
 
+.ring-overflow {
+  fill: none;
+  stroke: #7d1818;
+  stroke-width: 14;
+  stroke-linecap: round;
+  stroke-dasharray: 327;
+  stroke-dashoffset: 327;
+  opacity: 0;
+  transition: stroke-dashoffset 0.6s ease, opacity 0.2s ease;
+}
+
+.ring.over-budget #ring-percent {
+  color: #7d1818;
+}
+
 .macro-segment {
   fill: none;
   stroke-width: 14;

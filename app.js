@@ -219,26 +219,26 @@ const SENECA_QUOTES = mapQuoteEntries(
   ]
 );
 
-const JOCKO_WILLINK_QUOTES = mapQuoteEntries(
-  "Jocko Willink",
-  "Discipline Equals Freedom",
-  "https://www.success.com/10-jocko-willink-quotes-to-keep-you-disciplined/",
+const BENJAMIN_FRANKLIN_QUOTES = mapQuoteEntries(
+  "Benjamin Franklin",
+  "Poor Richard's Almanack",
+  "https://en.wikisource.org/wiki/Poor_Richard%27s_Almanack",
   [
-  ["Discipline Equals Freedom: Field Manual", `Discipline equals freedom.`],
-  ["Discipline Equals Freedom: Field Manual", `Don't count on motivation. Count on discipline.`],
-  ["Discipline Equals Freedom: Field Manual", `You know what you have to do. So make yourself do it.`],
-  ["Discipline Equals Freedom: Field Manual", `There is no hack. There is no shortcut. There is no easy way. There is only one way: so get after it.`],
+  ["Aphorism 112", `Diligence is the mother of good luck.`],
+  ["Aphorism 113", `Diligence overcomes difficulties, sloth makes them.`],
+  ["Aphorism 126", `Dost thou love life? Then do not squander time; for that's the stuff life is made of.`],
+  ["Aphorism 129", `Drive thy business, or it will drive thee.`],
   ]
 );
 
-const RYAN_HOLIDAY_QUOTES = mapQuoteEntries(
-  "Ryan Holiday",
-  "Daily Stoic Essays",
-  "https://ryanholiday.net/discipline-is-destiny-25-habits-that-will-guarantee-you-success/",
+const CONFUCIUS_QUOTES = mapQuoteEntries(
+  "Confucius",
+  "The Analects of Confucius (James Legge translation)",
+  "https://www.gutenberg.org/cache/epub/3330/pg3330.html",
   [
-  ["Discipline Is Destiny", `Discipline is the win.`],
-  ["The Most Important Decision of Your Life", `Virtue is something we do.`],
-  ["Daily Discipline Habit", `Make little progress each day.`],
+  ["Book I, Chapter I", `Is it not pleasant to learn with a constant perseverance and application?`],
+  ["Book I, Chapter VIII", `Hold faithfulness and sincerity as first principles.`],
+  ["Book II, Chapter IV", `At fifteen, I had my mind bent on learning.`],
   ]
 );
 
@@ -366,8 +366,8 @@ const RYAN_OVERRIDE_QUOTES = loadQuoteOverrides("ryanHoliday", {
   fallbackSourceUrl: "https://ryanholiday.net/books/",
 });
 
-const ACTIVE_JOCKO_QUOTES = JOCKO_OVERRIDE_QUOTES.length ? JOCKO_OVERRIDE_QUOTES : JOCKO_WILLINK_QUOTES;
-const ACTIVE_RYAN_QUOTES = RYAN_OVERRIDE_QUOTES.length ? RYAN_OVERRIDE_QUOTES : RYAN_HOLIDAY_QUOTES;
+const ACTIVE_JOCKO_QUOTES = JOCKO_OVERRIDE_QUOTES.length ? JOCKO_OVERRIDE_QUOTES : BENJAMIN_FRANKLIN_QUOTES;
+const ACTIVE_RYAN_QUOTES = RYAN_OVERRIDE_QUOTES.length ? RYAN_OVERRIDE_QUOTES : CONFUCIUS_QUOTES;
 
 const STRICT_EPICTETUS_QUOTES = takeFirstNQuotes(
   prioritizeThemeQuotes(EPICTETUS_QUOTES, EPICTETUS_THEME_INDICES),
@@ -416,9 +416,10 @@ const DAILY_DISCIPLINE_QUOTES = STRICT_30_READY
   ? STRICT_30_PER_AUTHOR_QUOTES
   : FALLBACK_UNIQUE_QUOTES;
 
-if (!STRICT_30_READY) {
+const HAS_MODERN_OVERRIDE_QUOTES = JOCKO_OVERRIDE_QUOTES.length > 0 || RYAN_OVERRIDE_QUOTES.length > 0;
+if (HAS_MODERN_OVERRIDE_QUOTES && !STRICT_30_READY) {
   console.warn(
-    `Strict 30-per-author mode is inactive. Jocko: ${STRICT_JOCKO_QUOTES.length}/30, Ryan: ${STRICT_RYAN_QUOTES.length}/30. Add window.CALORIE_TRACKER_CONFIG.quoteOverrides to provide 30 unique quotes for each author.`
+    `Strict 30-per-author override mode is inactive. Jocko: ${STRICT_JOCKO_QUOTES.length}/30, Ryan: ${STRICT_RYAN_QUOTES.length}/30. Add window.CALORIE_TRACKER_CONFIG.quoteOverrides to provide 30 unique quotes for each author.`
   );
 }
 
@@ -479,7 +480,9 @@ const elements = {
   todayValue: document.getElementById("today-value"),
   remainingValue: document.getElementById("remaining-value"),
   ringPercent: document.getElementById("ring-percent"),
+  calorieRing: document.getElementById("calorie-progress-ring"),
   ringProgress: document.querySelector(".ring-progress"),
+  ringOverflow: document.getElementById("ring-overflow"),
   macroProteinRing: document.getElementById("macro-protein-ring"),
   macroCarbsRing: document.getElementById("macro-carbs-ring"),
   macroFatRing: document.getElementById("macro-fat-ring"),
@@ -2229,13 +2232,25 @@ function deleteActivePlan(planId = getActiveProfile().activePlanId) {
 }
 
 function updateRing(percent) {
+  if (!elements.ringProgress || !elements.ringPercent) return;
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
-  const clamped = Math.min(100, Math.max(0, percent));
+  const normalized = Number.isFinite(percent) ? Math.max(0, percent) : 0;
+  const clamped = Math.min(100, normalized);
   const offset = circumference - (clamped / 100) * circumference;
   elements.ringProgress.style.strokeDasharray = `${circumference}`;
   elements.ringProgress.style.strokeDashoffset = `${offset}`;
-  elements.ringPercent.textContent = `${Math.round(clamped)}%`;
+  if (elements.ringOverflow) {
+    const overflow = Math.min(100, Math.max(0, normalized - 100));
+    const overflowOffset = circumference - (overflow / 100) * circumference;
+    elements.ringOverflow.style.strokeDasharray = `${circumference}`;
+    elements.ringOverflow.style.strokeDashoffset = `${overflowOffset}`;
+    elements.ringOverflow.style.opacity = overflow > 0 ? "1" : "0";
+  }
+  if (elements.calorieRing) {
+    elements.calorieRing.classList.toggle("over-budget", normalized > 100);
+  }
+  elements.ringPercent.textContent = `${Math.round(normalized)}%`;
 }
 
 function updateMacroRing(proteinG, carbsG, fatG) {

@@ -44,7 +44,14 @@ You can also open `index.html` directly in a browser, but a local server is reco
 
 ## Optional: custom quote packs (30 per author)
 
-If you want strict 30/author quote rotation (Epictetus, Marcus Aurelius, Seneca, Jocko Willink, Ryan Holiday):
+Default quote rotation is 150 public-domain quotes across:
+- Epictetus
+- Marcus Aurelius
+- Seneca
+- Benjamin Franklin
+- Confucius
+
+If you want strict 30/author quote rotation with modern-author overrides (Epictetus, Marcus Aurelius, Seneca, Jocko Willink, Ryan Holiday):
 
 1. Open `/Users/joshsmith/calorie-tracker-legacy/config.local.js`.
 2. Add `quoteOverrides` with:
@@ -74,7 +81,8 @@ window.CALORIE_TRACKER_CONFIG = {
 Notes:
 - The app deduplicates quotes by text.
 - If both modern author lists have 30 unique quotes, strict 150 rotation activates (30/author).
-- If not, app falls back to available unique quotes and shows a console warning.
+- If not, app falls back to available unique quotes.
+- A strict-mode console warning appears only when custom override quotes are provided but still incomplete.
 
 ### Goodreads workflow (fast path)
 
