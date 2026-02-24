@@ -128,11 +128,13 @@ If `config.local.js` has empty values, the app stays in local-only mode.
 
 The app will:
 - Keep localStorage as a fallback.
-- Auto-save to cloud after local changes when signed in.
-- Resolve startup conflicts by preferring the newer copy (local vs cloud `updatedAt`).
+- Auto-save to cloud after local changes when signed in (fast debounce + background retry).
+- Run background cloud checks (timer + tab focus/online) to reduce missed sync windows.
+- Resolve sync conflicts by merging local and cloud state to avoid stale overwrites.
 - Keep a rolling cloud snapshot history (latest 300 states per user) via DB trigger.
 - Allow restoring snapshots from the app UI.
 - Allow downloading/uploading full JSON backups from the app UI.
+- Promote logged foods into `sharedFoodCatalog` so food name + calories/macros are reusable across profiles in the same account.
 
 ## Data model overview
 

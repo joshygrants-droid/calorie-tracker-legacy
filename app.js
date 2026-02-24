@@ -17,9 +17,10 @@ const APP_TIME_ZONE = "America/Denver";
 const PROJECTION_LOG_WINDOW_DAYS = 28;
 const PROJECTION_WEIGHT_LOOKBACK = 8;
 const CLOUD_CONFIG_ENDPOINT = "/api/public-config";
-const CLOUD_SYNC_DEBOUNCE_MS = 900;
-const CLOUD_AUTO_PULL_INTERVAL_MS = 45000;
+const CLOUD_SYNC_DEBOUNCE_MS = 250;
+const CLOUD_AUTO_PULL_INTERVAL_MS = 30000;
 const CLOUD_AUTO_PULL_MIN_GAP_MS = 12000;
+const CLOUD_AUTO_PUSH_INTERVAL_MS = 10000;
 const CLOUD_HISTORY_FETCH_LIMIT = 50;
 const MACRO_COLORS = {
   protein: "#00c853",
@@ -697,10 +698,12 @@ let cloudSyncTimer = null;
 let cloudSyncInFlight = false;
 let cloudStatusNote = "";
 let cloudAutoPullIntervalId = null;
+let cloudAutoPushIntervalId = null;
 let cloudLastAutoPullAt = 0;
 let allowLocalWithoutSignIn = false;
 let cloudLastSyncAt = null;
 let cloudLastSyncKind = "";
+let cloudHasPendingLocalChanges = false;
 let cloudPanelCollapsed = false;
 let cloudPanelUserSet = false;
 let cloudHistoryInFlight = false;
@@ -1450,7 +1453,11 @@ function loadState() {
 function persistState(nextState, options = {}) {
   const { updateTimestamp = true, skipCloud = false } = options;
   persistLocalState(nextState, { updateTimestamp });
-  if (!skipCloud) queueCloudSave();
+  if (skipCloud) return;
+  if (canUseCloudSync()) {
+    cloudHasPendingLocalChanges = true;
+  }
+  queueCloudSave();
 }
 
 function cloudTimeLabel(input = new Date()) {
@@ -2055,9 +2062,12 @@ function recordCloudLastSync(when = new Date(), kind = "Synced") {
 }
 
 function cloudLastSyncLabel() {
-  if (!cloudLastSyncAt) return "Last sync: —";
+  if (!cloudLastSyncAt) {
+    return cloudHasPendingLocalChanges ? "Last sync: — (pending upload)" : "Last sync: —";
+  }
   const time = cloudTimeLabel(cloudLastSyncAt);
-  return cloudLastSyncKind ? `Last sync: ${time} (${cloudLastSyncKind})` : `Last sync: ${time}`;
+  const base = cloudLastSyncKind ? `Last sync: ${time} (${cloudLastSyncKind})` : `Last sync: ${time}`;
+  return cloudHasPendingLocalChanges ? `${base} · pending upload` : base;
 }
 
 function cloudDateTimeLabel(input = new Date()) {
@@ -2363,7 +2373,8 @@ function renderCloudStatus() {
       : allowLocalWithoutSignIn
         ? "Local-only mode active on this device. Sign in any time to sync."
         : "Sign in to load cloud data before profile setup.";
-  elements.cloudSyncStatus.textContent = cloudStatusNote || defaultText;
+  const pendingSuffix = signedIn && cloudHasPendingLocalChanges ? " (pending upload)" : "";
+  elements.cloudSyncStatus.textContent = `${cloudStatusNote || defaultText}${pendingSuffix}`;
 
   elements.cloudSignIn.disabled = !ready || signedIn || cloudBusy;
   elements.cloudSignOut.disabled = !ready || !signedIn || cloudBusy;
@@ -2486,12 +2497,27 @@ function stopCloudAutoPull() {
   cloudAutoPullIntervalId = null;
 }
 
+function stopCloudAutoPush() {
+  if (!cloudAutoPushIntervalId) return;
+  clearInterval(cloudAutoPushIntervalId);
+  cloudAutoPushIntervalId = null;
+}
+
 function startCloudAutoPull() {
   stopCloudAutoPull();
   if (!canUseCloudSync()) return;
   cloudAutoPullIntervalId = setInterval(() => {
     void syncCloudState({ showStatus: false, suppressNoChangeStatus: true });
   }, CLOUD_AUTO_PULL_INTERVAL_MS);
+}
+
+function startCloudAutoPush() {
+  stopCloudAutoPush();
+  if (!canUseCloudSync()) return;
+  cloudAutoPushIntervalId = setInterval(() => {
+    if (!cloudHasPendingLocalChanges || cloudSyncInFlight) return;
+    void syncCloudState({ showStatus: false, suppressNoChangeStatus: true });
+  }, CLOUD_AUTO_PUSH_INTERVAL_MS);
 }
 
 function triggerCloudAutoPull() {
@@ -2502,6 +2528,11 @@ function triggerCloudAutoPull() {
   void syncCloudState({ showStatus: false, suppressNoChangeStatus: true });
 }
 
+function flushCloudSyncOnExit() {
+  if (!canUseCloudSync() || cloudSyncInFlight || !cloudHasPendingLocalChanges) return;
+  void syncCloudState({ showStatus: false, suppressNoChangeStatus: true });
+}
+
 async function syncStateToCloud({ status = "Syncing to cloud..." } = {}) {
   if (!canUseCloudSync() || cloudSyncInFlight) return false;
   cloudSyncInFlight = true;
@@ -2509,11 +2540,13 @@ async function syncStateToCloud({ status = "Syncing to cloud..." } = {}) {
   renderCloudStatus();
   try {
     await upsertCloudStateRow();
+    cloudHasPendingLocalChanges = false;
     recordCloudLastSync(new Date(), "Uploaded");
     cloudStatusNote = `Synced at ${cloudTimeLabel()}.`;
     return true;
   } catch (error) {
     console.error("Cloud upload failed:", error);
+    cloudHasPendingLocalChanges = true;
     cloudStatusNote = `Cloud sync failed: ${error.message || "Unknown error"}`;
     return false;
   } finally {
@@ -2535,6 +2568,7 @@ async function syncCloudState(options = {}) {
     const row = await pullCloudStateRow();
     if (!row?.state) {
       await upsertCloudStateRow();
+      cloudHasPendingLocalChanges = false;
       recordCloudLastSync(new Date(), "Initialized");
       if (showStatus) cloudStatusNote = "Cloud initialized from this device.";
       return true;
@@ -2546,6 +2580,7 @@ async function syncCloudState(options = {}) {
       const remoteRowUpdatedAt = Date.parse(String(row.updated_at || ""));
       const remoteReferenceTs = remoteStateUpdatedAt || (Number.isFinite(remoteRowUpdatedAt) ? remoteRowUpdatedAt : Date.now());
       applyCloudState(remoteState);
+      cloudHasPendingLocalChanges = false;
       recordCloudLastSync(new Date(remoteReferenceTs), "Downloaded");
       cloudStatusNote = `Loaded cloud data (${cloudTimeLabel(remoteReferenceTs)}).`;
       return true;
@@ -2577,11 +2612,13 @@ async function syncCloudState(options = {}) {
         const mergedState = mergeStatesForSync(state, remoteState);
         applyCloudState(mergedState);
         await upsertCloudStateRow();
+        cloudHasPendingLocalChanges = false;
         recordCloudLastSync(new Date(), "Merged");
         cloudStatusNote = `Merged local + cloud data (${cloudTimeLabel()}).`;
         return true;
       }
       applyCloudState(remoteState);
+      cloudHasPendingLocalChanges = false;
       recordCloudLastSync(new Date(remoteUpdatedAt), "Downloaded");
       cloudStatusNote = `Loaded cloud data (${cloudTimeLabel(remoteUpdatedAt)}).`;
       return true;
@@ -2592,11 +2629,13 @@ async function syncCloudState(options = {}) {
         const mergedState = mergeStatesForSync(state, remoteState);
         applyCloudState(mergedState);
         await upsertCloudStateRow();
+        cloudHasPendingLocalChanges = false;
         recordCloudLastSync(new Date(), "Merged");
         if (showStatus) cloudStatusNote = `Merged local + cloud data (${cloudTimeLabel()}).`;
         return true;
       }
       await upsertCloudStateRow();
+      cloudHasPendingLocalChanges = false;
       recordCloudLastSync(new Date(), "Uploaded");
       if (showStatus) cloudStatusNote = `Uploaded local changes (${cloudTimeLabel()}).`;
       return true;
@@ -2606,11 +2645,13 @@ async function syncCloudState(options = {}) {
       const mergedState = mergeStatesForSync(state, remoteState);
       applyCloudState(mergedState);
       await upsertCloudStateRow();
+      cloudHasPendingLocalChanges = false;
       recordCloudLastSync(new Date(), "Merged");
       if (showStatus) cloudStatusNote = `Merged local + cloud data (${cloudTimeLabel()}).`;
       return true;
     }
 
+    cloudHasPendingLocalChanges = false;
     recordCloudLastSync(new Date(), "Checked");
     if (!suppressNoChangeStatus) {
       cloudStatusNote = `Already in sync (${cloudTimeLabel()}).`;
@@ -2618,6 +2659,7 @@ async function syncCloudState(options = {}) {
     return true;
   } catch (error) {
     console.error("Cloud sync failed:", error);
+    cloudHasPendingLocalChanges = true;
     cloudStatusNote = `Cloud sync failed: ${error.message || "Unknown error"}`;
     return false;
   } finally {
@@ -2680,6 +2722,8 @@ async function signOutCloudSession() {
     cloudSession = null;
     allowLocalWithoutSignIn = true;
     stopCloudAutoPull();
+    stopCloudAutoPush();
+    cloudHasPendingLocalChanges = false;
     clearCloudLastSyncRuntime();
     resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
     cloudPanelUserSet = false;
@@ -2698,6 +2742,9 @@ async function initCloudSync() {
   renderCloudStatus();
   if (!window.supabase || typeof window.supabase.createClient !== "function") {
     allowLocalWithoutSignIn = true;
+    stopCloudAutoPull();
+    stopCloudAutoPush();
+    cloudHasPendingLocalChanges = false;
     cloudStatusNote = "Supabase SDK failed to load. Cloud sync is disabled.";
     resetCloudHistoryRuntime("Cloud snapshots are unavailable until Supabase is configured.");
     renderCloudStatus();
@@ -2708,6 +2755,9 @@ async function initCloudSync() {
   cloudConfig = await loadCloudConfig();
   if (!cloudConfig) {
     allowLocalWithoutSignIn = true;
+    stopCloudAutoPull();
+    stopCloudAutoPush();
+    cloudHasPendingLocalChanges = false;
     resetCloudHistoryRuntime("Cloud snapshots are unavailable until Supabase is configured.");
     renderCloudStatus();
     openPreferredView();
@@ -2726,6 +2776,9 @@ async function initCloudSync() {
   if (error) {
     console.error("Supabase session init failed:", error);
     allowLocalWithoutSignIn = true;
+    stopCloudAutoPull();
+    stopCloudAutoPush();
+    cloudHasPendingLocalChanges = false;
     cloudStatusNote = `Cloud auth failed: ${error.message || "Unknown error"}`;
     resetCloudHistoryRuntime("Cloud snapshots are unavailable until sign-in is working.");
     renderCloudStatus();
@@ -2738,6 +2791,7 @@ async function initCloudSync() {
     cloudSession = session;
     if (event === "SIGNED_IN") {
       allowLocalWithoutSignIn = false;
+      cloudHasPendingLocalChanges = false;
       setActiveCloudUser(session?.user?.id);
       hydrateStateForSignedInUser(session?.user?.id);
       hydrateCloudLastSyncForUser(session?.user?.id);
@@ -2747,6 +2801,7 @@ async function initCloudSync() {
       cloudStatusNote = `Signed in as ${session?.user?.email || "account"}.`;
       renderCloudStatus();
       startCloudAutoPull();
+      startCloudAutoPush();
       void syncCloudState({ preferRemoteOnFirstSync: true }).finally(() => {
         void refreshCloudHistory({ showStatus: false });
         openPreferredView();
@@ -2757,6 +2812,8 @@ async function initCloudSync() {
       allowLocalWithoutSignIn = true;
       setActiveCloudUser(null);
       stopCloudAutoPull();
+      stopCloudAutoPush();
+      cloudHasPendingLocalChanges = false;
       clearCloudLastSyncRuntime();
       resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
       cloudPanelUserSet = false;
@@ -2771,6 +2828,7 @@ async function initCloudSync() {
 
   if (cloudSession?.user?.id) {
     allowLocalWithoutSignIn = false;
+    cloudHasPendingLocalChanges = false;
     setActiveCloudUser(cloudSession.user.id);
     hydrateStateForSignedInUser(cloudSession.user.id);
     hydrateCloudLastSyncForUser(cloudSession.user.id);
@@ -2780,6 +2838,7 @@ async function initCloudSync() {
     cloudStatusNote = `Signed in as ${cloudSession.user.email || "account"}.`;
     renderCloudStatus();
     startCloudAutoPull();
+    startCloudAutoPush();
     await syncCloudState({ preferRemoteOnFirstSync: true });
     await refreshCloudHistory({ showStatus: false });
     openPreferredView();
@@ -2788,6 +2847,8 @@ async function initCloudSync() {
   allowLocalWithoutSignIn = false;
   setActiveCloudUser(null);
   stopCloudAutoPull();
+  stopCloudAutoPush();
+  cloudHasPendingLocalChanges = false;
   clearCloudLastSyncRuntime();
   resetCloudHistoryRuntime("Sign in to load cloud snapshots.");
   cloudPanelUserSet = false;
@@ -3163,6 +3224,7 @@ function setStepsForDate(dateKey, steps) {
 
 function setEntriesForDate(dateKey, entries) {
   const profile = getActiveProfile();
+  ensureLoggedFoodsAreShared(profile, entries);
   profile.foodLogs[dateKey] = entries;
   profile.historyIndex[dateKey] = {
     totalCalories: entries.reduce((sum, entry) => sum + entry.calories, 0),
@@ -3171,6 +3233,103 @@ function setEntriesForDate(dateKey, entries) {
   };
   profile.updatedAt = nowIso();
   persistState(state);
+}
+
+function normalizeFoodNameKey(name) {
+  return String(name || "").trim().toLowerCase();
+}
+
+function perServingFoodMacrosFromEntry(entry) {
+  const servings = Math.max(0.1, safeNumber(entry?.servings, 1));
+  const calories = Math.max(0, safeNumber(entry?.calories, 0));
+  const proteinG = Math.max(0, safeNumber(entry?.proteinG, 0));
+  const carbsG = Math.max(0, safeNumber(entry?.carbsG, 0));
+  const fatG = Math.max(0, safeNumber(entry?.fatG, 0));
+  return {
+    servings,
+    calories: Number((calories / servings).toFixed(1)),
+    proteinG: Number((proteinG / servings).toFixed(1)),
+    carbsG: Number((carbsG / servings).toFixed(1)),
+    fatG: Number((fatG / servings).toFixed(1)),
+  };
+}
+
+function ensureLoggedFoodsAreShared(profile, entries = []) {
+  if (!profile || !Array.isArray(entries) || !entries.length) return;
+  const catalog = getFoodCatalog();
+  const nameToFoodId = {};
+  Object.values(catalog).forEach((food) => {
+    const key = normalizeFoodNameKey(food?.name);
+    if (key && !nameToFoodId[key]) nameToFoodId[key] = food.id;
+  });
+
+  let changed = false;
+  entries.forEach((entry) => {
+    if (!entry || typeof entry !== "object") return;
+    const foodName = String(entry.food || "").trim();
+    if (!foodName) return;
+    const nameKey = normalizeFoodNameKey(foodName);
+    const perServing = perServingFoodMacrosFromEntry(entry);
+    entry.servings = perServing.servings;
+
+    let foodId = String(entry.foodId || "").trim();
+    if (!foodId || !catalog[foodId]) {
+      const byNameId = nameToFoodId[nameKey];
+      if (byNameId && catalog[byNameId]) {
+        foodId = byNameId;
+      } else {
+        foodId = crypto.randomUUID();
+      }
+    }
+
+    const existing = catalog[foodId] ? normalizeFoodRecord(catalog[foodId]) : null;
+    const incomingMacroSum = perServing.proteinG + perServing.carbsG + perServing.fatG;
+    const existingMacroSum = foodMacroSum(existing);
+    const shouldImproveNutrition =
+      incomingMacroSum > existingMacroSum ||
+      ((safeNumber(existing?.calories, 0) || 0) <= 0 && perServing.calories > 0);
+    const shouldFillName = !String(existing?.name || "").trim();
+    const shouldSaveFood = !existing || shouldImproveNutrition || shouldFillName;
+
+    let resolvedFood = existing;
+    if (shouldSaveFood) {
+      resolvedFood = normalizeFoodRecord({
+        ...(existing || {}),
+        id: foodId,
+        name: shouldFillName ? foodName : String(existing?.name || foodName || "Custom food"),
+        calories: shouldImproveNutrition ? perServing.calories : safeNumber(existing?.calories, 0),
+        proteinG: shouldImproveNutrition ? perServing.proteinG : safeNumber(existing?.proteinG, 0),
+        carbsG: shouldImproveNutrition ? perServing.carbsG : safeNumber(existing?.carbsG, 0),
+        fatG: shouldImproveNutrition ? perServing.fatG : safeNumber(existing?.fatG, 0),
+        source: existing?.source || "logged",
+        updatedAt: nowIso(),
+        createdAt: existing?.createdAt || nowIso(),
+      });
+      catalog[foodId] = resolvedFood;
+      changed = true;
+    }
+
+    if (entry.foodId !== foodId) {
+      entry.foodId = foodId;
+      changed = true;
+    }
+    if (resolvedFood && !entry.foodSnapshot) {
+      entry.foodSnapshot = {
+        name: resolvedFood.name,
+        brand: resolvedFood.brand || "",
+        servingSize: resolvedFood.servingSize || "1 serving",
+      };
+      changed = true;
+    }
+
+    if (nameKey && !nameToFoodId[nameKey]) {
+      nameToFoodId[nameKey] = foodId;
+    }
+  });
+
+  if (changed) {
+    profile.foodCatalog = mergeFoodCatalogs(profile.foodCatalog || {}, catalog);
+  }
 }
 
 function getFoodCatalog() {
@@ -4242,14 +4401,23 @@ if (elements.backupImportFile) {
   });
 }
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible") return;
-  triggerCloudAutoPull();
+  if (document.visibilityState === "visible") {
+    triggerCloudAutoPull();
+    return;
+  }
+  flushCloudSyncOnExit();
 });
 window.addEventListener("focus", () => {
   triggerCloudAutoPull();
 });
 window.addEventListener("online", () => {
   triggerCloudAutoPull();
+});
+window.addEventListener("pagehide", () => {
+  flushCloudSyncOnExit();
+});
+window.addEventListener("beforeunload", () => {
+  flushCloudSyncOnExit();
 });
 
 elements.setupProfileSelect.addEventListener("change", () => setActiveProfile(elements.setupProfileSelect.value));
