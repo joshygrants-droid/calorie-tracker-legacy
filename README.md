@@ -76,6 +76,21 @@ Notes:
 - If both modern author lists have 30 unique quotes, strict 150 rotation activates (30/author).
 - If not, app falls back to available unique quotes and shows a console warning.
 
+### Goodreads workflow (fast path)
+
+If you want to source quotes from Goodreads:
+
+1. Open `/Users/joshsmith/calorie-tracker-legacy/quote-overrides.goodreads.template.js`.
+2. Copy quote objects into:
+   - `jockoWillink` (30 unique from *Extreme Ownership*)
+   - `ryanHoliday` (30 unique from *The Obstacle Is the Way*, *Discipline Is Destiny*, *Courage Is Calling*)
+3. Copy the `quoteOverrides` block into `/Users/joshsmith/calorie-tracker-legacy/config.local.js` under `window.CALORIE_TRACKER_CONFIG`.
+4. Refresh the app.
+5. Confirm strict mode is active:
+   - Open browser dev tools console.
+   - Ensure this warning does **not** appear:
+     `Strict 30-per-author mode is inactive...`
+
 ## Optional local cloud testing
 
 1. Edit `config.local.js` with your Supabase values (or copy values from `config.local.example.js`).
