@@ -44,12 +44,13 @@ You can also open `index.html` directly in a browser, but a local server is reco
 
 ## Optional: custom quote packs (30 per author)
 
-Default quote rotation is 150 public-domain quotes across:
+Default quote rotation is 210 public-domain quotes across:
 - Epictetus
 - Marcus Aurelius
 - Seneca
 - Benjamin Franklin
 - Confucius
+- James Allen
 
 If you want strict 30/author quote rotation with modern-author overrides (Epictetus, Marcus Aurelius, Seneca, Jocko Willink, Ryan Holiday):
 

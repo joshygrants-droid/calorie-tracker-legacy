@@ -40,7 +40,7 @@ const WEIGHT_LOSS_MILESTONES = [
   { lbs: 50, object: "about one panda", emoji: "🐼" },
 ];
 
-const DAILY_QUOTE_ROTATION_DAYS = 150;
+const DAILY_QUOTE_ROTATION_DAYS = 210;
 
 function mapQuoteEntries(author, work, sourceUrl, entries) {
   return entries.map(([section, text]) => ({
@@ -228,6 +228,26 @@ const BENJAMIN_FRANKLIN_QUOTES = mapQuoteEntries(
   ["Aphorism 113", `Diligence overcomes difficulties, sloth makes them.`],
   ["Aphorism 126", `Dost thou love life? Then do not squander time; for that's the stuff life is made of.`],
   ["Aphorism 129", `Drive thy business, or it will drive thee.`],
+  ["Aphorism 2", `Early to bed and early to rise, makes a man healthy, wealthy and wise.`],
+  ["Aphorism 27", `God helps them that help themselves.`],
+  ["Aphorism 37", `Keep thy shop, and thy shop will keep thee.`],
+  ["Aphorism 44", `Industry need not wish.`],
+  ["Aphorism 45", `There are no gains, without pains.`],
+  ["Aphorism 46", `He that can have Patience, can have what he will.`],
+  ["Aphorism 53", `Lost Time is never found again.`],
+  ["Aphorism 55", `One today is worth two tomorrows.`],
+  ["Aphorism 56", `Never leave that till tomorrow which you can do today.`],
+  ["Aphorism 59", `Laziness travels so slowly, that Poverty soon overtakes him.`],
+  ["Aphorism 63", `Sloth, like Rust, consumes faster than Labour wears, while the used Key is always bright.`],
+  ["Aphorism 68", `Plough deep, while Sluggards sleep; And you shall have Corn, to sell and to keep.`],
+  ["Aphorism 73", `The sleeping Fox catches no poultry.`],
+  ["Aphorism 74", `A little neglect may breed great mischief.`],
+  ["Aphorism 81", `By diligence and patience, the mouse ate in two the cable.`],
+  ["Aphorism 83", `Well done is better than well said.`],
+  ["Aphorism 90", `Little strokes fell great oaks.`],
+  ["Aphorism 98", `Haste makes waste.`],
+  ["Aphorism 109", `Tis easier to suppress the first Desire than to satisfy all that follow it.`],
+  ["Aphorism 122", `There will be sleeping enough in the Grave.`],
   ]
 );
 
@@ -242,7 +262,57 @@ const CONFUCIUS_QUOTES = mapQuoteEntries(
   ]
 );
 
+const JAMES_ALLEN_QUOTES = mapQuoteEntries(
+  "James Allen",
+  "As a Man Thinketh",
+  "https://www.gutenberg.org/ebooks/4507",
+  [
+  ["Chapter 1", `A man is literally what he thinks, his character being the complete sum of all his thoughts.`],
+  ["Chapter 1", `As the physically weak man can make himself strong by careful and patient training, so the man of weak thoughts can make them strong by exercising himself in right thinking.`],
+  ["Chapter 1", `Only by much searching and mining are gold and diamonds obtained, and man can find every truth connected with his being, if he will dig deep into the mine of his soul.`],
+  ["Chapter 2", `Act is the blossom of thought, and joy and suffering are its fruits.`],
+  ["Chapter 3", `To put away aimlessness and weakness, and to begin to think with purpose, is to enter the ranks of those strong ones who only recognize failure as one of the pathways to attainment.`],
+  ["Chapter 3", `Doubts and fears should be rigorously excluded; they are disintegrating elements which break up the straight line of effort, rendering it crooked, ineffectual, useless.`],
+  ["Chapter 3", `Thoughts of doubt and fear never accomplished anything, and never can.`],
+  ["Chapter 3", `The will to do springs from the knowledge that we can do.`],
+  ["Chapter 3", `He who has conquered doubt and fear has conquered failure.`],
+  ["Chapter 4", `All achievements, whether in the business, intellectual, or spiritual world, are the result of definitely directed thought.`],
+  ["Chapter 4", `Achievement, of whatever kind, is the crown of effort, the diadem of thought.`],
+  ["Chapter 4", `In all human affairs there are efforts, and there are results, and the strength of the effort is the measure of the result.`],
+  ["Chapter 4", `He who would accomplish little must sacrifice little; he who would achieve much must sacrifice much; he who would attain highly must sacrifice greatly.`],
+  ["Chapter 5", `By the aid of self-control, resolution, purity, righteousness, and well-directed thought a man ascends.`],
+  ["Chapter 6", `Victories attained by right thought can only be maintained by watchfulness.`],
+  ["Chapter 6", `Calmness of mind is one of the beautiful jewels of wisdom.`],
+  ["Chapter 6", `The strong, calm man is always loved and revered.`],
+  ["Chapter 7", `The Vision that you glorify in your mind, the Ideal that you enthrone in your heart, this you will build your life by, this you will become.`],
+  ["Chapter 7", `Self-control is strength. Right Thought is mastery. Calmness is power.`],
+  ["Chapter 7", `Keep your hand firmly upon the helm of thought.`],
+  ["Chapter 1", `Men do not attract that which they want, but that which they are.`],
+  ["Chapter 1", `Not what he wishes and prays for does a man get, but what he justly earns.`],
+  ["Chapter 1", `Good thoughts and actions can never produce bad results; bad thoughts and actions can never produce good results.`],
+  ["Chapter 1", `This is but saying that nothing can come from corn but corn, nothing from nettles but nettles.`],
+  ["Chapter 1", `Circumstance does not make the man; it reveals him to himself.`],
+  ["Chapter 1", `Men are anxious to improve their circumstances, but are unwilling to improve themselves; they therefore remain bound.`],
+  ["Chapter 1", `The man who does not shrink from self-crucifixion can never fail to accomplish the object upon which his heart is set.`],
+  ["Chapter 1", `He who has conquered weakness, and has put away all selfish thoughts, belongs neither to oppressor nor oppressed.`],
+  ["Chapter 2", `Every action and feeling is preceded by a thought.`],
+  ["Chapter 2", `Suffering is always the effect of wrong thought in some direction.`],
+  ["Chapter 2", `Blessedness, not material possessions, is the measure of right thought.`],
+  ["Chapter 2", `There can be no progress, no achievement without sacrifice.`],
+  ["Chapter 3", `Humanity surges with uncontrolled passion, is tumultuous with ungoverned grief, is blown about by anxiety and doubt, only because it does not understand the laws of thought.`],
+  ["Chapter 3", `Purpose, energy, power to do, and all strong thoughts cease when doubt and fear creep in.`],
+  ["Chapter 3", `Thought allied fearlessly to purpose becomes creative force.`],
+  ["Chapter 3", `Having conceived of his purpose, a man should mentally mark out a straight pathway to its achievement, looking neither to the right nor the left.`],
+  ["Chapter 4", `Intellectual achievements are the result of thought consecrated to the search for knowledge, or for the beautiful and true in life and nature.`],
+  ["Chapter 4", `Spiritual achievements are the consummation of holy aspirations.`],
+  ["Chapter 7", `The greatest achievement was at first and for a time a dream.`],
+  ["Chapter 7", `Dreams are the seedlings of realities.`],
+  ]
+);
+
 const STRICT_QUOTES_PER_AUTHOR = 30;
+const STRICT_AUTHOR_GROUP_COUNT = 5;
+const STRICT_TARGET_QUOTE_COUNT = STRICT_QUOTES_PER_AUTHOR * STRICT_AUTHOR_GROUP_COUNT;
 const inlineAppConfigForQuotes =
   typeof window !== "undefined" && window.CALORIE_TRACKER_CONFIG
     ? window.CALORIE_TRACKER_CONFIG
@@ -429,7 +499,7 @@ const STRICT_30_READY =
   STRICT_SENECA_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
   STRICT_JOCKO_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
   STRICT_RYAN_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
-  STRICT_30_PER_AUTHOR_QUOTES.length === DAILY_QUOTE_ROTATION_DAYS;
+  STRICT_30_PER_AUTHOR_QUOTES.length === STRICT_TARGET_QUOTE_COUNT;
 
 const FALLBACK_UNIQUE_QUOTES = stableShuffleQuotes(
   uniqueQuotesByText(
@@ -439,6 +509,7 @@ const FALLBACK_UNIQUE_QUOTES = stableShuffleQuotes(
       prioritizeThemeQuotes(SENECA_QUOTES, SENECA_THEME_INDICES),
       ACTIVE_JOCKO_QUOTES,
       ACTIVE_RYAN_QUOTES,
+      JAMES_ALLEN_QUOTES,
     ])
   )
 );
@@ -454,9 +525,10 @@ if (HAS_MODERN_OVERRIDE_QUOTES && !STRICT_30_READY) {
   );
 }
 
-if (DAILY_DISCIPLINE_QUOTES.length !== DAILY_QUOTE_ROTATION_DAYS) {
+const EXPECTED_DAILY_QUOTE_COUNT = STRICT_30_READY ? STRICT_TARGET_QUOTE_COUNT : DAILY_QUOTE_ROTATION_DAYS;
+if (DAILY_DISCIPLINE_QUOTES.length !== EXPECTED_DAILY_QUOTE_COUNT) {
   console.warn(
-    `Expected ${DAILY_QUOTE_ROTATION_DAYS} daily quotes, found ${DAILY_DISCIPLINE_QUOTES.length}.`
+    `Expected ${EXPECTED_DAILY_QUOTE_COUNT} daily quotes, found ${DAILY_DISCIPLINE_QUOTES.length}.`
   );
 }
 
