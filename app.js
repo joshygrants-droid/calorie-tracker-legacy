@@ -242,6 +242,12 @@ const RYAN_HOLIDAY_QUOTES = mapQuoteEntries(
   ]
 );
 
+const STRICT_QUOTES_PER_AUTHOR = 30;
+const inlineAppConfigForQuotes =
+  typeof window !== "undefined" && window.CALORIE_TRACKER_CONFIG
+    ? window.CALORIE_TRACKER_CONFIG
+    : {};
+
 const EPICTETUS_THEME_INDICES = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 21, 22, 23, 24, 25, 27, 32, 34, 37, 38, 48, 52, 53, 57,
 ];
@@ -253,6 +259,42 @@ const MARCUS_AURELIUS_THEME_INDICES = [
 const SENECA_THEME_INDICES = [
   0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15, 17, 18, 19, 22, 24, 26, 27, 28, 29, 30, 31, 32, 34, 36, 38, 39,
 ];
+
+function normalizeQuoteOverrideEntry(rawEntry, { author, fallbackWork, fallbackSourceUrl }) {
+  if (!rawEntry || typeof rawEntry !== "object") return null;
+
+  const text = String(rawEntry.text || "").trim();
+  if (!text) return null;
+
+  const section = String(rawEntry.section || "").trim() || "Unspecified";
+  const work = String(rawEntry.work || "").trim() || fallbackWork;
+  const sourceUrl = String(rawEntry.sourceUrl || "").trim() || fallbackSourceUrl;
+
+  return {
+    text,
+    author,
+    work,
+    section,
+    sourceUrl,
+  };
+}
+
+function loadQuoteOverrides(authorKey, options) {
+  const rawQuotes = inlineAppConfigForQuotes?.quoteOverrides?.[authorKey];
+  if (!Array.isArray(rawQuotes) || !rawQuotes.length) return [];
+
+  const unique = [];
+  const seenText = new Set();
+  for (const rawQuote of rawQuotes) {
+    const normalized = normalizeQuoteOverrideEntry(rawQuote, options);
+    if (!normalized) continue;
+    const dedupeKey = normalized.text.trim().toLowerCase();
+    if (seenText.has(dedupeKey)) continue;
+    seenText.add(dedupeKey);
+    unique.push(normalized);
+  }
+  return unique;
+}
 
 function prioritizeThemeQuotes(authorQuotes, preferredIndices) {
   if (!Array.isArray(authorQuotes) || !authorQuotes.length) return [];
@@ -276,6 +318,28 @@ function prioritizeThemeQuotes(authorQuotes, preferredIndices) {
   return ordered;
 }
 
+function takeFirstNQuotes(authorQuotes, count = STRICT_QUOTES_PER_AUTHOR) {
+  if (!Array.isArray(authorQuotes) || !authorQuotes.length) return [];
+  if (!Number.isFinite(count) || count <= 0) return [];
+  return authorQuotes.slice(0, Math.trunc(count));
+}
+
+function uniqueQuotesByText(quotes) {
+  if (!Array.isArray(quotes) || !quotes.length) return [];
+  const unique = [];
+  const seenText = new Set();
+  for (const quote of quotes) {
+    if (!quote || typeof quote !== "object") continue;
+    const text = String(quote.text || "").trim();
+    if (!text) continue;
+    const dedupeKey = text.toLowerCase();
+    if (seenText.has(dedupeKey)) continue;
+    seenText.add(dedupeKey);
+    unique.push(quote);
+  }
+  return unique;
+}
+
 function interleaveQuoteGroups(groups) {
   if (!Array.isArray(groups) || !groups.length) return [];
   const maxLength = groups.reduce((max, group) => Math.max(max, Array.isArray(group) ? group.length : 0), 0);
@@ -290,13 +354,73 @@ function interleaveQuoteGroups(groups) {
   return interleaved;
 }
 
-const DAILY_DISCIPLINE_QUOTES = interleaveQuoteGroups([
+const JOCKO_OVERRIDE_QUOTES = loadQuoteOverrides("jockoWillink", {
+  author: "Jocko Willink",
+  fallbackWork: "Extreme Ownership",
+  fallbackSourceUrl: "https://echelonfront.com/books/extreme-ownership/",
+});
+
+const RYAN_OVERRIDE_QUOTES = loadQuoteOverrides("ryanHoliday", {
+  author: "Ryan Holiday",
+  fallbackWork: "The Obstacle Is the Way / Discipline Is Destiny / Courage Is Calling",
+  fallbackSourceUrl: "https://ryanholiday.net/books/",
+});
+
+const ACTIVE_JOCKO_QUOTES = JOCKO_OVERRIDE_QUOTES.length ? JOCKO_OVERRIDE_QUOTES : JOCKO_WILLINK_QUOTES;
+const ACTIVE_RYAN_QUOTES = RYAN_OVERRIDE_QUOTES.length ? RYAN_OVERRIDE_QUOTES : RYAN_HOLIDAY_QUOTES;
+
+const STRICT_EPICTETUS_QUOTES = takeFirstNQuotes(
   prioritizeThemeQuotes(EPICTETUS_QUOTES, EPICTETUS_THEME_INDICES),
+  STRICT_QUOTES_PER_AUTHOR
+);
+const STRICT_MARCUS_QUOTES = takeFirstNQuotes(
   prioritizeThemeQuotes(MARCUS_AURELIUS_QUOTES, MARCUS_AURELIUS_THEME_INDICES),
+  STRICT_QUOTES_PER_AUTHOR
+);
+const STRICT_SENECA_QUOTES = takeFirstNQuotes(
   prioritizeThemeQuotes(SENECA_QUOTES, SENECA_THEME_INDICES),
-  JOCKO_WILLINK_QUOTES,
-  RYAN_HOLIDAY_QUOTES,
-]);
+  STRICT_QUOTES_PER_AUTHOR
+);
+const STRICT_JOCKO_QUOTES = takeFirstNQuotes(ACTIVE_JOCKO_QUOTES, STRICT_QUOTES_PER_AUTHOR);
+const STRICT_RYAN_QUOTES = takeFirstNQuotes(ACTIVE_RYAN_QUOTES, STRICT_QUOTES_PER_AUTHOR);
+
+const STRICT_30_PER_AUTHOR_QUOTES = uniqueQuotesByText(
+  interleaveQuoteGroups([
+    STRICT_EPICTETUS_QUOTES,
+    STRICT_MARCUS_QUOTES,
+    STRICT_SENECA_QUOTES,
+    STRICT_JOCKO_QUOTES,
+    STRICT_RYAN_QUOTES,
+  ])
+);
+
+const STRICT_30_READY =
+  STRICT_EPICTETUS_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
+  STRICT_MARCUS_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
+  STRICT_SENECA_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
+  STRICT_JOCKO_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
+  STRICT_RYAN_QUOTES.length === STRICT_QUOTES_PER_AUTHOR &&
+  STRICT_30_PER_AUTHOR_QUOTES.length === DAILY_QUOTE_ROTATION_DAYS;
+
+const FALLBACK_UNIQUE_QUOTES = uniqueQuotesByText(
+  interleaveQuoteGroups([
+    prioritizeThemeQuotes(EPICTETUS_QUOTES, EPICTETUS_THEME_INDICES),
+    prioritizeThemeQuotes(MARCUS_AURELIUS_QUOTES, MARCUS_AURELIUS_THEME_INDICES),
+    prioritizeThemeQuotes(SENECA_QUOTES, SENECA_THEME_INDICES),
+    ACTIVE_JOCKO_QUOTES,
+    ACTIVE_RYAN_QUOTES,
+  ])
+);
+
+const DAILY_DISCIPLINE_QUOTES = STRICT_30_READY
+  ? STRICT_30_PER_AUTHOR_QUOTES
+  : FALLBACK_UNIQUE_QUOTES;
+
+if (!STRICT_30_READY) {
+  console.warn(
+    `Strict 30-per-author mode is inactive. Jocko: ${STRICT_JOCKO_QUOTES.length}/30, Ryan: ${STRICT_RYAN_QUOTES.length}/30. Add window.CALORIE_TRACKER_CONFIG.quoteOverrides to provide 30 unique quotes for each author.`
+  );
+}
 
 if (DAILY_DISCIPLINE_QUOTES.length !== DAILY_QUOTE_ROTATION_DAYS) {
   console.warn(
@@ -509,10 +633,12 @@ function positiveModulo(value, modulus) {
 
 function dailyQuoteSlotCount() {
   const configuredDays = Number(DAILY_QUOTE_ROTATION_DAYS);
+  const availableQuotes = DAILY_DISCIPLINE_QUOTES.length;
   if (Number.isFinite(configuredDays) && configuredDays > 0) {
-    return Math.trunc(configuredDays);
+    const configured = Math.trunc(configuredDays);
+    return availableQuotes > 0 ? Math.min(configured, availableQuotes) : configured;
   }
-  return DAILY_DISCIPLINE_QUOTES.length;
+  return availableQuotes;
 }
 
 function dailyQuoteIndex(dateKey = todayKey()) {

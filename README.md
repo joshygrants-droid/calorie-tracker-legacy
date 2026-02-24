@@ -42,6 +42,40 @@ Then open:
 
 You can also open `index.html` directly in a browser, but a local server is recommended.
 
+## Optional: custom quote packs (30 per author)
+
+If you want strict 30/author quote rotation (Epictetus, Marcus Aurelius, Seneca, Jocko Willink, Ryan Holiday):
+
+1. Open `/Users/joshsmith/calorie-tracker-legacy/config.local.js`.
+2. Add `quoteOverrides` with:
+   - `jockoWillink`: 30 unique quotes (for your case: from *Extreme Ownership*)
+   - `ryanHoliday`: 30 unique quotes (for your case: from *The Obstacle Is the Way*, *Discipline Is Destiny*, *Courage Is Calling*)
+3. Each quote object should have:
+   - `text` (required)
+   - `section` (required, chapter/part)
+   - `work` (optional, book title)
+   - `sourceUrl` (optional)
+
+Example shape:
+
+```js
+window.CALORIE_TRACKER_CONFIG = {
+  quoteOverrides: {
+    jockoWillink: [
+      { text: "Quote text...", section: "Chapter 1", work: "Extreme Ownership" },
+    ],
+    ryanHoliday: [
+      { text: "Quote text...", section: "Part I", work: "The Obstacle Is the Way" },
+    ],
+  },
+};
+```
+
+Notes:
+- The app deduplicates quotes by text.
+- If both modern author lists have 30 unique quotes, strict 150 rotation activates (30/author).
+- If not, app falls back to available unique quotes and shows a console warning.
+
 ## Optional local cloud testing
 
 1. Edit `config.local.js` with your Supabase values (or copy values from `config.local.example.js`).
