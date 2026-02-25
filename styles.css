@@ -154,63 +154,74 @@ p {
 }
 
 .cloud-sync-panel {
-  margin-top: 16px;
-  border: 1px dashed var(--stroke);
-  border-radius: 16px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.78);
+  margin-top: 14px;
+  border: 1px solid rgba(23, 21, 20, 0.14);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .global-cloud-sync-panel {
   margin-top: 0;
-  margin-bottom: 16px;
-  max-width: 860px;
+  margin-bottom: 12px;
+  max-width: 940px;
 }
 
 .cloud-sync-title {
   font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   margin-bottom: 0;
+  line-height: 1;
   color: var(--ink);
+  white-space: nowrap;
 }
 
 .cloud-sync-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .cloud-sync-toggle {
-  padding: 6px 10px;
+  padding: 4px 8px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
+  gap: 5px;
+  font-size: 0.8rem;
+  border-radius: 10px;
 }
 
 .cloud-sync-summary {
-  margin-top: 8px;
-  font-size: 0.88rem;
+  margin: 0;
+  min-width: 0;
+  font-size: 0.84rem;
+  line-height: 1.15;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cloud-sync-status {
-  margin-top: 8px;
-  font-size: 0.9rem;
-  line-height: 1.45;
+  margin-top: 6px;
+  font-size: 0.84rem;
+  line-height: 1.35;
 }
 
 .cloud-sync-last {
-  margin-top: 2px;
-  font-size: 0.8rem;
+  margin-top: 1px;
+  font-size: 0.76rem;
   color: var(--muted);
 }
 
 .cloud-sync-controls {
-  margin-top: 10px;
+  margin-top: 8px;
   display: grid;
   grid-template-columns: minmax(220px, 1fr) repeat(4, auto);
-  gap: 8px;
+  gap: 6px;
   align-items: end;
 }
 
@@ -1197,6 +1208,46 @@ select {
 
   .cloud-sync-controls {
     grid-template-columns: 1fr;
+  }
+
+  .cloud-sync-panel {
+    padding: 5px 6px;
+    border-radius: 10px;
+  }
+
+  .global-cloud-sync-panel {
+    margin-bottom: 8px;
+  }
+
+  .cloud-sync-header {
+    gap: 5px;
+  }
+
+  .cloud-sync-title {
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    line-height: 1;
+  }
+
+  .cloud-sync-summary {
+    font-size: 0.68rem;
+    line-height: 1.05;
+  }
+
+  .cloud-sync-toggle {
+    font-size: 0.68rem;
+    padding: 2px 6px;
+    border-radius: 8px;
+    min-height: 24px;
+  }
+
+  #cloud-sync-toggle-label {
+    display: none;
+  }
+
+  #cloud-sync-toggle-arrow {
+    font-size: 0.72rem;
+    line-height: 1;
   }
 
   .cloud-backup-grid {

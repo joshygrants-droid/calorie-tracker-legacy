@@ -2417,10 +2417,10 @@ function renderCloudStatus() {
   if (elements.cloudSyncSummary) {
     const syncSnippet = cloudLastSyncLabel().replace("Last sync: ", "");
     const summaryText = signedIn
-      ? `Signed in as ${cloudSession?.user?.email || "account"} · ${syncSnippet}`
+      ? `${cloudSession?.user?.email || "account"} · ${syncSnippet}`
       : allowLocalWithoutSignIn
-        ? "Local-only mode active"
-        : "Sign in required for cloud-first setup";
+        ? "Local-only active"
+        : "Sign in to sync";
     elements.cloudSyncSummary.textContent = summaryText;
   }
   if (elements.cloudHistoryStatus) {
