@@ -4333,6 +4333,9 @@ clearZeroOnFocus(elements.entryForm?.querySelector("#calories"));
 clearZeroOnFocus(elements.entryForm?.querySelector("#protein-g"));
 clearZeroOnFocus(elements.entryForm?.querySelector("#carbs-g"));
 clearZeroOnFocus(elements.entryForm?.querySelector("#fat-g"));
+if (elements.entryForm?.querySelector("#meal")) {
+  elements.entryForm.querySelector("#meal").value = "";
+}
 
 if (elements.cloudSignIn) {
   elements.cloudSignIn.addEventListener("click", () => {
